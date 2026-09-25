@@ -38,16 +38,21 @@
     padding: 6px 12px; font-size: 12px; font-weight: 600;
     display: inline-flex; align-items: center; gap: 6px;
     align-self: flex-start;
+    animation: badgeIn 0.5s ease-out;
+  }
+  @keyframes badgeIn {
+    from { opacity: 0; transform: translateX(-10px); }
+    to { opacity: 1; transform: translateX(0); }
   }
   .hud-badge.ok { color: var(--accent); }
   .hud-badge.err { color: var(--danger); }
 
-  /* NEW: Emergency Stop Button */
   #btnKillMic {
     position: absolute; top: 20px; right: 20px; z-index: 25;
     background: var(--danger); color: white; border: none;
     padding: 10px 16px; border-radius: 10px; font-size: 14px; font-weight: 700;
     cursor: pointer; display: none; box-shadow: 0 4px 12px rgba(255,77,94,0.4);
+    animation: badgeIn 0.3s ease-out;
   }
   #btnKillMic.on { display: block; }
 
@@ -56,6 +61,11 @@
     padding: 30px 20px 50px 20px;
     background: linear-gradient(transparent, rgba(0,0,0,0.85) 60%);
     display: flex; justify-content: space-between; align-items: center;
+    animation: controlsIn 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  @keyframes controlsIn {
+    from { transform: translateY(100%); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
   }
   .btn-icon {
     width: 50px; height: 50px; border-radius: 50%; border: none;
@@ -63,19 +73,31 @@
     color: white; font-size: 22px; display: flex; align-items: center; justify-content: center;
     cursor: pointer; transition: 0.2s;
   }
-  .btn-icon:active { background: rgba(255,255,255,0.3); transform: scale(0.95); }
+  .btn-icon:active { background: rgba(255,255,255,0.3); transform: scale(0.9); }
   .btn-icon:disabled { opacity: 0.3; }
 
   .shutter-wrap {
     position: relative; width: 80px; height: 80px;
     display: flex; align-items: center; justify-content: center;
   }
+  .shutter-wrap::before {
+    content: "";
+    position: absolute; inset: 0;
+    border-radius: 50%;
+    border: 2px solid rgba(255,255,255,0.25);
+    animation: shutterPulse 2s ease-in-out infinite;
+  }
+  @keyframes shutterPulse {
+    0%, 100% { transform: scale(1); opacity: 0.6; }
+    50% { transform: scale(1.15); opacity: 0; }
+  }
   .shutter {
     width: 72px; height: 72px; border-radius: 50%;
     border: 4px solid var(--shutter); background: transparent;
     cursor: pointer; transition: 0.15s; padding: 0;
+    position: relative; z-index: 1;
   }
-  .shutter:active { background: rgba(255,255,255,0.5); transform: scale(0.95); }
+  .shutter:active { background: rgba(255,255,255,0.5); transform: scale(0.9); }
   .shutter:disabled { opacity: 0.3; }
 
   .btn-record {
@@ -86,6 +108,11 @@
   }
   .btn-record .dot { width: 18px; height: 18px; border-radius: 50%; background: var(--danger); transition: 0.2s; }
   .btn-record.active .dot { width: 14px; height: 14px; border-radius: 2px; }
+  .btn-record.active { animation: recPulse 1.2s ease-in-out infinite; }
+  @keyframes recPulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(255, 77, 94, 0.6); }
+    50% { box-shadow: 0 0 0 12px rgba(255, 77, 94, 0); }
+  }
   .btn-record:active { transform: scale(0.9); }
   .btn-record:disabled { opacity: 0.3; }
 
@@ -95,29 +122,171 @@
     padding: 6px 16px; border-radius: 20px; font-size: 14px; z-index: 15;
     display: none; align-items: center; gap: 8px;
   }
-  #recTimer.on { display: flex; }
+  #recTimer.on { display: flex; animation: badgeIn 0.3s ease-out; }
   #recTimer .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--danger); animation: pulse 1s infinite; }
 
+  /* ========================================================
+     START OVERLAY with animated particle background
+     ======================================================== */
   #startOverlay {
     position: absolute; inset: 0; z-index: 20;
-    background: rgba(0,0,0,0.8); backdrop-filter: blur(6px);
-    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 20px;
-    transition: opacity 0.3s; text-align: center; padding: 20px;
+    background: radial-gradient(circle at 50% 30%, #14202c 0%, #05080c 70%);
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    transition: opacity 0.6s ease;
+    text-align: center; padding: 20px;
+    overflow: hidden;
   }
   #startOverlay.hidden { opacity: 0; pointer-events: none; }
-  #startOverlay h1 { margin: 0; font-size: 28px; }
-  #startOverlay p { color: var(--muted); margin: 0; max-width: 300px; }
+
+  /* Particle canvas covers the whole overlay */
+  #particleCanvas {
+    position: absolute; inset: 0;
+    width: 100%; height: 100%;
+    z-index: 0;
+    pointer-events: none;
+  }
+
+  /* Floating gradient orbs behind particles */
+  .orb {
+    position: absolute;
+    border-radius: 50%;
+    filter: blur(60px);
+    opacity: 0.35;
+    z-index: 0;
+    pointer-events: none;
+    animation: orbFloat 12s ease-in-out infinite;
+  }
+  .orb-1 {
+    width: 260px; height: 260px;
+    background: radial-gradient(circle, #35d0a5, transparent 70%);
+    top: 15%; left: -60px;
+    animation-delay: 0s;
+  }
+  .orb-2 {
+    width: 320px; height: 320px;
+    background: radial-gradient(circle, #3aa0ff, transparent 70%);
+    bottom: 5%; right: -80px;
+    animation-delay: -4s;
+  }
+  .orb-3 {
+    width: 200px; height: 200px;
+    background: radial-gradient(circle, #a06bff, transparent 70%);
+    top: 40%; right: 20%;
+    animation-delay: -8s;
+  }
+  @keyframes orbFloat {
+    0%, 100% { transform: translate(0, 0) scale(1); }
+    33% { transform: translate(30px, -40px) scale(1.1); }
+    66% { transform: translate(-20px, 30px) scale(0.95); }
+  }
+
+  .start-content {
+    position: relative; z-index: 2;
+    display: flex; flex-direction: column; align-items: center; gap: 20px;
+    max-width: 360px;
+    animation: contentIn 0.9s cubic-bezier(0.16, 1, 0.3, 1) both;
+    animation-delay: 0.2s;
+  }
+  @keyframes contentIn {
+    from { opacity: 0; transform: translateY(30px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .logo-mark {
+    width: 88px; height: 88px;
+    border-radius: 24px;
+    background: linear-gradient(135deg, #35d0a5 0%, #3aa0ff 100%);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 44px;
+    box-shadow:
+      0 20px 60px rgba(53, 208, 165, 0.35),
+      0 0 0 1px rgba(255,255,255,0.1) inset;
+    animation: logoPop 1s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+    animation-delay: 0.1s;
+    position: relative;
+    overflow: hidden;
+  }
+  .logo-mark::after {
+    content: "";
+    position: absolute; top: 0; left: -100%;
+    width: 100%; height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.5), transparent);
+    animation: logoShine 3s ease-in-out infinite;
+    animation-delay: 1.5s;
+  }
+  @keyframes logoPop {
+    0% { transform: scale(0) rotate(-180deg); opacity: 0; }
+    100% { transform: scale(1) rotate(0); opacity: 1; }
+  }
+  @keyframes logoShine {
+    0% { left: -100%; }
+    50%, 100% { left: 200%; }
+  }
+
+  #startOverlay h1 {
+    margin: 0; font-size: 34px; font-weight: 800; letter-spacing: -0.5px;
+    background: linear-gradient(90deg, #ffffff 0%, #35d0a5 50%, #ffffff 100%);
+    background-size: 200% auto;
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    animation: titleShine 4s linear infinite;
+  }
+  @keyframes titleShine {
+    0% { background-position: 0% center; }
+    100% { background-position: 200% center; }
+  }
+
+  #startOverlay p {
+    color: var(--muted); margin: 0; max-width: 300px; font-size: 14px;
+    animation: contentIn 0.9s cubic-bezier(0.16, 1, 0.3, 1) both;
+    animation-delay: 0.4s;
+  }
+
   .btn-primary {
     background: linear-gradient(180deg, #35d0a5, #25a884);
-    color: #04231b; border: none; padding: 14px 32px;
-    border-radius: 12px; font-size: 16px; font-weight: 700; cursor: pointer;
+    color: #04231b; border: none; padding: 16px 36px;
+    border-radius: 14px; font-size: 16px; font-weight: 700; cursor: pointer;
     transition: 0.2s;
+    box-shadow: 0 10px 30px rgba(53, 208, 165, 0.35);
+    position: relative;
+    overflow: hidden;
+    animation: contentIn 0.9s cubic-bezier(0.16, 1, 0.3, 1) both;
+    animation-delay: 0.6s;
   }
-  .btn-primary:active { transform: scale(0.96); }
+  .btn-primary::before {
+    content: "";
+    position: absolute; inset: 0;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent);
+    transform: translateX(-100%);
+    animation: btnShine 2.5s ease-in-out infinite;
+  }
+  @keyframes btnShine {
+    0% { transform: translateX(-100%); }
+    60%, 100% { transform: translateX(100%); }
+  }
+  .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 14px 40px rgba(53, 208, 165, 0.5); }
+  .btn-primary:active { transform: scale(0.96); box-shadow: 0 6px 20px rgba(53, 208, 165, 0.35); }
 
+  .hint {
+    font-size: 11px; color: var(--muted); margin-top: 4px;
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 6px 12px; border-radius: 999px;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.08);
+    animation: contentIn 0.9s cubic-bezier(0.16, 1, 0.3, 1) both;
+    animation-delay: 0.8s;
+  }
+  .hint .lock { animation: lockPulse 2s ease-in-out infinite; }
+  @keyframes lockPulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+  }
+
+  /* Panels */
   .panel {
     position: absolute; top: 0; right: -100%; width: 100%; max-width: 360px; height: 100%;
-    background: var(--panel); z-index: 30; transition: right 0.3s ease;
+    background: var(--panel); z-index: 30; transition: right 0.35s cubic-bezier(0.16, 1, 0.3, 1);
     display: flex; flex-direction: column; border-left: 1px solid var(--line);
     box-shadow: -10px 0 30px rgba(0,0,0,0.5);
   }
@@ -128,24 +297,30 @@
   }
   .panel-header h2 { margin: 0; font-size: 16px; font-weight: 700; }
   .panel-body { padding: 20px; overflow-y: auto; flex: 1; }
-  .close-btn { background: none; border: none; color: var(--muted); font-size: 24px; cursor: pointer; padding: 0; }
+  .close-btn { background: none; border: none; color: var(--muted); font-size: 24px; cursor: pointer; padding: 0; transition: 0.2s; }
+  .close-btn:active { transform: rotate(90deg); color: var(--accent); }
 
   .field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px; }
   .field label { font-size: 12px; color: var(--muted); font-weight: 600; letter-spacing: 0.5px; }
   .field input, .field textarea {
     width: 100%; padding: 12px; border-radius: 10px; border: 1px solid var(--line);
     background: #0d131c; color: var(--text); font: inherit; outline: none;
+    transition: 0.2s;
   }
-  .field input:focus, .field textarea:focus { border-color: var(--accent); }
+  .field input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(53,208,165,0.15); }
 
   .switch { display: flex; align-items: center; gap: 12px; padding: 12px 0; font-size: 14px; cursor: pointer; }
   .switch input { appearance: none; width: 44px; height: 26px; border-radius: 999px; background: #2a3547; position: relative; transition: 0.2s; cursor: pointer; flex: none; border: none; }
-  .switch input::after { content: ""; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: #8b9bb0; transition: 0.2s; }
+  .switch input::after { content: ""; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: #8b9bb0; transition: 0.2s cubic-bezier(0.34, 1.56, 0.64, 1); }
   .switch input:checked { background: rgba(53,208,165,0.3); }
   .switch input:checked::after { left: 21px; background: var(--accent); }
 
   .gallery-grid { display: flex; flex-direction: column; gap: 12px; }
-  .gallery-item { display: flex; gap: 12px; align-items: center; background: #182130; border-radius: 12px; padding: 10px; border: 1px solid var(--line); }
+  .gallery-item {
+    display: flex; gap: 12px; align-items: center; background: #182130;
+    border-radius: 12px; padding: 10px; border: 1px solid var(--line);
+    animation: badgeIn 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  }
   .gallery-item img, .gallery-item video { width: 60px; height: 60px; border-radius: 8px; object-fit: cover; background: #000; }
   .gallery-item .info { flex: 1; min-width: 0; }
   .gallery-item .name { font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -154,8 +329,9 @@
   .gallery-item .acts a, .gallery-item .acts button {
     padding: 6px 10px; font-size: 12px; border-radius: 6px; border: 1px solid var(--line);
     background: #0f1621; color: var(--muted); text-decoration: none; cursor: pointer; font-weight: 600;
+    transition: 0.2s;
   }
-  .gallery-item .acts a:active, .gallery-item .acts button:active { background: var(--accent); color: #000; }
+  .gallery-item .acts a:active, .gallery-item .acts button:active { background: var(--accent); color: #000; transform: scale(0.95); }
   .empty-msg { color: var(--muted); font-size: 13px; font-style: italic; text-align: center; margin-top: 40px; }
 
   @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
@@ -174,7 +350,6 @@
   <div class="hud-badge" id="secBadge" style="color: var(--muted);">🔒 Secure context</div>
 </div>
 
-<!-- Emergency Kill Mic Button -->
 <button id="btnKillMic">🛑 STOP MIC</button>
 
 <div id="recTimer"><span class="dot"></span><span id="recTime">00:00</span></div>
@@ -193,10 +368,18 @@
 </div>
 
 <div id="startOverlay">
-  <h1>GeoCam</h1>
-  <p>Geotagged photos & videos directly to your device.</p>
-  <button class="btn-primary" id="btnStart">Start Camera & GPS</button>
-  <p style="font-size: 11px; margin-top: 10px;">Microphone will only be requested when you record video</p>
+  <canvas id="particleCanvas"></canvas>
+  <div class="orb orb-1"></div>
+  <div class="orb orb-2"></div>
+  <div class="orb orb-3"></div>
+
+  <div class="start-content">
+    <div class="logo-mark">📸</div>
+    <h1>GeoCam</h1>
+    <p>Geotagged photos & videos directly to your device.</p>
+    <button class="btn-primary" id="btnStart">Start Camera & GPS</button>
+    <div class="hint"><span class="lock">🔒</span> Mic only active while recording</div>
+  </div>
 </div>
 
 <div class="panel" id="settingsPanel">
@@ -263,6 +446,7 @@ const els = {
   recTime: $('#recTime'),
   galleryGrid: $('#galleryGrid'),
   count: $('#count'),
+  particleCanvas: $('#particleCanvas'),
 };
 
 const state = {
@@ -290,6 +474,144 @@ const state = {
 
 state.mapTileImg.crossOrigin = "anonymous";
 
+/* =========================================================
+   PARTICLE SYSTEM — responsive dots drifting upward
+   ========================================================= */
+let particles = [];
+let particleRAF = null;
+let particleCtx = null;
+let particleDpr = 1;
+
+function initParticles() {
+  const canvas = els.particleCanvas;
+  if (!canvas) return;
+  const rect = canvas.getBoundingClientRect();
+  particleDpr = Math.min(window.devicePixelRatio || 1, 2);
+  canvas.width = rect.width * particleDpr;
+  canvas.height = rect.height * particleDpr;
+  particleCtx = canvas.getContext('2d');
+  particleCtx.scale(particleDpr, particleDpr);
+
+  // Number of particles scales with screen area (capped for perf)
+  const w = rect.width;
+  const h = rect.height;
+  const count = Math.min(90, Math.max(40, Math.floor((w * h) / 9000)));
+
+  particles = [];
+  for (let i = 0; i < count; i++) {
+    particles.push(makeParticle(w, h, true));
+  }
+
+  startParticleLoop(w, h);
+}
+
+function makeParticle(w, h, randomY) {
+  const size = Math.random() * 2.4 + 0.6;
+  const speed = Math.random() * 0.5 + 0.15;
+  const drift = (Math.random() - 0.5) * 0.25;
+  const hue = Math.random();
+  // Colors: mostly white/green, occasional blue
+  let color;
+  if (hue < 0.6) color = `rgba(255, 255, 255, ${Math.random() * 0.5 + 0.3})`;
+  else if (hue < 0.85) color = `rgba(53, 208, 165, ${Math.random() * 0.6 + 0.35})`;
+  else color = `rgba(58, 160, 255, ${Math.random() * 0.5 + 0.3})`;
+
+  return {
+    x: Math.random() * w,
+    y: randomY ? Math.random() * h : h + 10,
+    size,
+    speed,
+    drift,
+    color,
+    alpha: Math.random() * 0.6 + 0.4,
+    twinklePhase: Math.random() * Math.PI * 2,
+    twinkleSpeed: Math.random() * 0.03 + 0.01,
+    wobble: Math.random() * Math.PI * 2,
+    wobbleSpeed: Math.random() * 0.02 + 0.005,
+  };
+}
+
+function startParticleLoop(w, h) {
+  if (particleRAF) cancelAnimationFrame(particleRAF);
+  let lastTime = performance.now();
+
+  const tick = (now) => {
+    const dt = Math.min(50, now - lastTime);
+    lastTime = now;
+
+    particleCtx.clearRect(0, 0, w, h);
+
+    for (let i = 0; i < particles.length; i++) {
+      const p = particles[i];
+
+      // Movement
+      p.y -= p.speed * (dt / 16);
+      p.wobble += p.wobbleSpeed * (dt / 16);
+      p.x += Math.sin(p.wobble) * 0.3 + p.drift * (dt / 16);
+      p.twinklePhase += p.twinkleSpeed * (dt / 16);
+
+      // Recycle when off top
+      if (p.y < -10 || p.x < -10 || p.x > w + 10) {
+        particles[i] = makeParticle(w, h, false);
+        continue;
+      }
+
+      // Twinkle
+      const twinkle = 0.6 + Math.sin(p.twinklePhase) * 0.4;
+      const alpha = p.alpha * twinkle;
+
+      // Glow layer
+      particleCtx.beginPath();
+      particleCtx.fillStyle = p.color;
+      particleCtx.globalAlpha = alpha * 0.35;
+      particleCtx.arc(p.x, p.y, p.size * 3.5, 0, Math.PI * 2);
+      particleCtx.fill();
+
+      // Core dot
+      particleCtx.beginPath();
+      particleCtx.globalAlpha = alpha;
+      particleCtx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+      particleCtx.fill();
+    }
+
+    particleCtx.globalAlpha = 1;
+    particleRAF = requestAnimationFrame(tick);
+  };
+
+  particleRAF = requestAnimationFrame(tick);
+}
+
+function stopParticles() {
+  if (particleRAF) {
+    cancelAnimationFrame(particleRAF);
+    particleRAF = null;
+  }
+}
+
+// Debounced resize handler
+let particleResizeTimer = null;
+window.addEventListener('resize', () => {
+  if (els.startOverlay.classList.contains('hidden')) return;
+  clearTimeout(particleResizeTimer);
+  particleResizeTimer = setTimeout(() => {
+    stopParticles();
+    initParticles();
+  }, 200);
+});
+
+// Kick off particles when page loads
+window.addEventListener('load', () => {
+  initParticles();
+});
+
+// Also start immediately in case load already fired
+if (document.readyState === 'complete' || document.readyState === 'interactive') {
+  setTimeout(initParticles, 50);
+}
+
+/* =========================================================
+   Helpers
+   ========================================================= */
 function setStatus(msg, kind = '') {
   els.gpsStatus.textContent = msg;
   els.gpsStatus.className = 'hud-badge ' + kind;
@@ -331,7 +653,7 @@ function encodePlusCode(lat, lon) {
 })();
 
 /* =========================================================
-   REVERSE GEOCODING (BigDataCloud - Reliable & Free)
+   REVERSE GEOCODING (BigDataCloud)
    ========================================================= */
 async function fetchLocationName(lat, lon) {
   if (els.locationName.value.trim() !== '') return;
@@ -353,7 +675,6 @@ async function fetchLocationName(lat, lon) {
       if (data.city) parts.push(data.city);
       if (data.principalSubdivision) parts.push(data.principalSubdivision);
       if (data.countryName) parts.push(data.countryName);
-      
       state.resolvedAddress = parts.length > 0 ? parts.join(', ') : 'Unknown Area';
     } else {
       state.resolvedAddress = 'Unknown Area';
@@ -401,7 +722,6 @@ function startGeolocation() {
       state.geoError = null;
       setStatus(`📍 ±${Math.round(pos.coords.accuracy)}m`, 'ok');
       updateMapTile(pos.coords.latitude, pos.coords.longitude);
-      
       fetchLocationName(pos.coords.latitude, pos.coords.longitude);
     },
     (err) => {
@@ -417,13 +737,11 @@ function stopGeolocation() {
 }
 
 /* =========================================================
-   CAMERA & MICROPHONE CLEANUP (Aggressive)
+   CAMERA & MICROPHONE CLEANUP
    ========================================================= */
 function forceStopAllMedia() {
-  // 1. Stop the emergency button
   els.btnKillMic.classList.remove('on');
   
-  // 2. Kill the microphone hardware immediately
   if (state.audioTrack) {
     try {
       state.audioTrack.enabled = false;
@@ -432,7 +750,6 @@ function forceStopAllMedia() {
     state.audioTrack = null;
   }
 
-  // 3. Stop the video stream
   if (state.stream) {
     state.stream.getTracks().forEach(t => {
       try { t.stop(); } catch (e) {}
@@ -441,7 +758,6 @@ function forceStopAllMedia() {
   }
   els.video.srcObject = null;
 
-  // 4. Stop the recorder
   if (state.recorder && state.recorder.state !== 'inactive') {
     try { state.recorder.stop(); } catch (e) {}
   }
@@ -476,7 +792,13 @@ async function startCamera() {
 
   els.btnShutter.disabled = false;
   els.btnRecord.disabled = false;
+
+  // Fade out overlay then stop particles
   els.startOverlay.classList.add('hidden');
+  setTimeout(() => {
+    stopParticles();
+    particles = [];
+  }, 600);
 
   startGeolocation();
 }
@@ -801,10 +1123,19 @@ function buildMeta(kind, extra = {}) {
 }
 
 /* =========================================================
-   VIDEO RECORDING (Audio requested on demand + Strict Cleanup)
+   VIDEO RECORDING
    ========================================================= */
 function pickVideoMime() {
-  const c = ['video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm', 'video/mp4;codecs=avc1.42E01E,mp4a.40.2', 'video/mp4'];
+  // Prioritize MP4 (iOS compatible) then WebM (Android)
+  const c = [
+    'video/mp4;codecs=avc1.42E01E,mp4a.40.2',
+    'video/mp4;codecs=avc1.4D401E,mp4a.40.2',
+    'video/mp4;codecs=h264,aac',
+    'video/mp4',
+    'video/webm;codecs=vp9,opus',
+    'video/webm;codecs=vp8,opus',
+    'video/webm',
+  ];
   if (typeof MediaRecorder === 'undefined') return '';
   for (const m of c) { try { if (MediaRecorder.isTypeSupported(m)) return m; } catch (_) {} }
   return '';
@@ -828,10 +1159,8 @@ async function startRecording() {
   const canvasStream = canvas.captureStream(30);
   canvasStream.getVideoTracks().forEach(t => recordStream.addTrack(t));
 
-  // Request Microphone ONLY on demand
   if (els.chkAudio.checked) {
     try {
-      // Show the emergency stop button while we hold the mic
       els.btnKillMic.classList.add('on');
       
       const audioStream = await navigator.mediaDevices.getUserMedia({ 
@@ -898,7 +1227,6 @@ function stopRecording() {
   if (!state.recording) return;
   state.recording = false;
 
-  // CRITICAL PRIVACY FIX: Stop the microphone immediately
   if (state.audioTrack) {
     try {
       state.audioTrack.enabled = false;
@@ -930,7 +1258,6 @@ els.btnSwitchCam.addEventListener('click', switchCamera);
 els.btnShutter.addEventListener('click', () => { capturePhoto().catch(e => console.error(e)); });
 els.btnRecord.addEventListener('click', async () => { if (state.recording) stopRecording(); else await startRecording(); });
 
-// EMERGENCY STOP BUTTON
 els.btnKillMic.addEventListener('click', () => {
   forceStopAllMedia();
   setStatus('🛑 Mic forcibly stopped', 'err');
@@ -941,7 +1268,6 @@ els.closeSettings.addEventListener('click', () => els.settingsPanel.classList.re
 els.btnGallery.addEventListener('click', () => els.galleryPanel.classList.add('open'));
 els.closeGallery.addEventListener('click', () => els.galleryPanel.classList.remove('open'));
 
-// Aggressive privacy watchdog: runs when app is backgrounded or closed
 window.addEventListener('pagehide', () => {
   forceStopAllMedia();
   stopGeolocation();
