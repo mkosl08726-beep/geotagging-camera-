@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>GeoCam — Geotagged Photos &amp; Videos</title>
+<title>GeoCam — Rich Geotagging</title>
 <style>
   :root{
     --bg:#0b0f14; --panel:#121821; --panel2:#182130; --line:#26324a;
@@ -27,7 +27,7 @@
   .logo span{color:var(--accent)}
   .badge{font-size:12px;color:var(--muted);border:1px solid var(--line);padding:2px 9px;border-radius:999px}
   .spacer{flex:1}
-  main{display:grid;grid-template-columns:minmax(0,1fr) 350px;gap:18px;padding:18px;align-items:start}
+  main{display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:18px;padding:18px;align-items:start}
   @media (max-width:920px){main{grid-template-columns:1fr;padding:12px;gap:12px}}
 
   .stage{
@@ -126,8 +126,7 @@
 
 <header>
   <div class="logo">Geo<span>Cam</span></div>
-  <div class="badge">Photos · EXIF GPS</div>
-  <div class="badge">Videos · Mic audio</div>
+  <div class="badge">Rich Watermark</div>
   <div class="spacer"></div>
   <div class="badge" id="secBadge">…</div>
 </header>
@@ -161,11 +160,16 @@
       </div>
 
       <div class="field">
-        <label for="labelInput">Overlay label (optional)</label>
-        <input type="text" id="labelInput" placeholder="e.g. Site survey — Block B" maxlength="60">
+        <label for="locationName">Location Name</label>
+        <input type="text" id="locationName" placeholder="e.g. Treetop Hideaways" maxlength="40">
       </div>
 
-      <label class="switch"><input type="checkbox" id="chkOverlay" checked> Burn GPS + time overlay</label>
+      <div class="field">
+        <label for="userNote">Note</label>
+        <input type="text" id="userNote" placeholder="e.g. Amazing place to spend vacation" maxlength="80">
+      </div>
+
+      <label class="switch"><input type="checkbox" id="chkOverlay" checked> Burn rich watermark</label>
       <label class="switch"><input type="checkbox" id="chkExif" checked> Write real EXIF GPS into JPEG</label>
       <label class="switch"><input type="checkbox" id="chkAudio" checked> Record microphone with video</label>
 
@@ -188,7 +192,7 @@
 'use strict';
 
 /* =========================================================
-   0. Small helpers
+   0. Helpers
    ========================================================= */
 const $ = (s) => document.querySelector(s);
 
@@ -209,7 +213,8 @@ const els = {
   chkOverlay: $('#chkOverlay'),
   chkExif:    $('#chkExif'),
   chkAudio:   $('#chkAudio'),
-  labelInput: $('#labelInput'),
+  locationName: $('#locationName'),
+  userNote:   $('#userNote'),
   status:     $('#status'),
   gallery:    $('#gallery'),
   count:      $('#count'),
@@ -253,6 +258,35 @@ function formatDateTime(d) {
 function formatCoords(lat, lon) {
   return `${Math.abs(lat).toFixed(6)}° ${lat >= 0 ? 'N' : 'S'}, ` +
          `${Math.abs(lon).toFixed(6)}° ${lon >= 0 ? 'E' : 'W'}`;
+}
+
+/* =========================================================
+   Plus Code Generator (Open Location Code)
+   ========================================================= */
+function encodePlusCode(lat, lon) {
+  const alphabet = '23456789CFGHJMPQRVWX';
+  const latVal = lat + 90;
+  const lonVal = lon + 180;
+  let code = '';
+  let latRes = 20, lonRes = 20;
+
+  for (let i = 0; i < 4; i++) {
+    const latDigit = Math.floor(latVal / latRes);
+    const lonDigit = Math.floor(lonVal / lonRes);
+    code += alphabet[latDigit] + alphabet[lonDigit];
+    latVal %= latRes; lonVal %= lonRes;
+    latRes /= 20; lonRes /= 20;
+  }
+  // Add 2 more digits for ~14m accuracy
+  latRes = 0.05; lonRes = 0.05;
+  for (let i = 0; i < 1; i++) {
+    const latDigit = Math.floor(latVal / latRes);
+    const lonDigit = Math.floor(lonVal / lonRes);
+    code += alphabet[latDigit] + alphabet[lonDigit];
+    latVal %= latRes; lonVal %= lonRes;
+    latRes /= 20; lonRes /= 20;
+  }
+  return code.slice(0, 8) + '+' + code.slice(8);
 }
 
 /* =========================================================
@@ -330,7 +364,6 @@ async function startCamera() {
         : false,
     });
   } catch (err) {
-    // If audio failed but video might still work, retry video-only.
     if (wantAudio) {
       try {
         stream = await navigator.mediaDevices.getUserMedia({ video: baseVideo, audio: false });
@@ -402,8 +435,11 @@ function hudLines() {
     out.meta = state.geoError ? state.geoError : 'Waiting for GPS fix…';
   }
 
-  const label = els.labelInput.value.trim();
-  if (label) out.label = label;
+  const name = els.locationName.value.trim();
+  const note = els.userNote.value.trim();
+  if (name || note) {
+    out.label = [name, note].filter(Boolean).join(' — ');
+  }
 
   return out;
 }
@@ -418,7 +454,7 @@ function updateHud() {
 setInterval(updateHud, 250);
 
 /* =========================================================
-   5. Watermark drawing on canvas
+   5. Rich Watermark Drawing
    ========================================================= */
 function roundRectPath(ctx, x, y, w, h, r) {
   if (typeof ctx.roundRect === 'function') {
@@ -436,55 +472,127 @@ function roundRectPath(ctx, x, y, w, h, r) {
 }
 
 function drawWatermark(ctx, w, h) {
-  const h2 = hudLines();
-  const lines = [h2.coords];
-  if (h2.meta) lines.push(h2.meta);
-  lines.push(h2.time);
-  if (h2.label) lines.push(h2.label);
+  const p = state.position;
+  const now = new Date();
+  const base = Math.min(w, h);
+  
+  // Layout dimensions
+  const pad = base * 0.04;
+  const boxW = w * 0.75;
+  const boxH = Math.max(180, boxW * 0.42);
+  const bx = pad;
+  const by = h - pad - boxH;
+  
+  const mapSize = boxH - pad * 2;
+  const mx = bx + pad;
+  const my = by + pad;
+  
+  const tx = mx + mapSize + pad;
+  const ty = my + pad;
+  const textMaxW = boxW - pad * 2 - mapSize - pad;
 
-  const base = Math.max(w, h);
-  const fs = Math.max(13, Math.round(base * 0.0205));
-  const lh = Math.round(fs * 1.42);
-  const padX = Math.round(fs * 0.85);
-  const padY = Math.round(fs * 0.62);
-  const margin = Math.round(fs * 1.1);
-
-  const font = `600 ${fs}px ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif`;
-  ctx.save();
-  ctx.font = font;
-  ctx.textBaseline = 'top';
-
-  let maxW = 0;
-  for (const l of lines) maxW = Math.max(maxW, ctx.measureText(l).width);
-
-  const boxW = Math.min(w - margin * 2, maxW + padX * 2 + Math.round(fs * 0.5));
-  const boxH = lines.length * lh + padY * 2;
-  const x = margin;
-  const y = h - margin - boxH;
-
-  // panel
-  ctx.fillStyle = 'rgba(0,0,0,0.58)';
-  roundRectPath(ctx, x, y, boxW, boxH, Math.round(fs * 0.6));
+  // 1. Draw main background panel
+  ctx.fillStyle = 'rgba(15, 20, 25, 0.88)';
+  roundRectPath(ctx, bx, by, boxW, boxH, 12);
   ctx.fill();
 
-  // accent bar
-  ctx.fillStyle = '#35d0a5';
-  roundRectPath(ctx, x, y, Math.round(fs * 0.28), boxH, Math.round(fs * 0.14));
+  // 2. Draw Map Placeholder
+  ctx.fillStyle = '#1a2634';
+  roundRectPath(ctx, mx, my, mapSize, mapSize, 8);
+  ctx.fill();
+  
+  // Map grid lines (simulating roads)
+  ctx.strokeStyle = '#2a3b4c';
+  ctx.lineWidth = Math.max(2, base * 0.003);
+  ctx.beginPath();
+  ctx.moveTo(mx, my + mapSize * 0.3);
+  ctx.lineTo(mx + mapSize, my + mapSize * 0.3);
+  ctx.moveTo(mx + mapSize * 0.4, my);
+  ctx.lineTo(mx + mapSize * 0.4, my + mapSize);
+  ctx.moveTo(mx, my + mapSize * 0.7);
+  ctx.lineTo(mx + mapSize, my + mapSize * 0.7);
+  ctx.moveTo(mx + mapSize * 0.8, my);
+  ctx.lineTo(mx + mapSize * 0.8, my + mapSize);
+  ctx.stroke();
+
+  // Map Pin
+  const pinX = mx + mapSize * 0.5;
+  const pinY = my + mapSize * 0.5;
+  ctx.fillStyle = 'rgba(255, 77, 94, 0.3)';
+  ctx.beginPath();
+  ctx.arc(pinX, pinY, base * 0.025, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#ff4d5e';
+  ctx.beginPath();
+  ctx.arc(pinX, pinY, base * 0.01, 0, Math.PI * 2);
   ctx.fill();
 
-  // text
-  ctx.font = font;
+  // 3. Draw Text Information
+  let curY = ty;
+  
+  // Location Name
+  const locName = els.locationName.value.trim() || 'Unknown Location';
+  ctx.font = `bold ${Math.round(base * 0.035)}px sans-serif`;
   ctx.fillStyle = '#ffffff';
-  const tx = x + padX + Math.round(fs * 0.45);
-  lines.forEach((line, i) => {
-    const ly = y + padY + i * lh;
-    if (i === lines.length - 1 && h2.label && line === h2.label) {
-      ctx.fillStyle = '#ffd479';
-    }
-    ctx.fillText(line, tx, ly);
-  });
+  ctx.fillText(locName, tx, curY);
+  curY += base * 0.045;
 
-  ctx.restore();
+  // Coordinates
+  if (p) {
+    ctx.font = `${Math.round(base * 0.022)}px sans-serif`;
+    ctx.fillStyle = '#a0b0c0';
+    ctx.fillText(formatCoords(p.lat, p.lon), tx, curY);
+    curY += base * 0.035;
+
+    // Plus Code
+    const plusCode = encodePlusCode(p.lat, p.lon);
+    ctx.font = `monospace ${Math.round(base * 0.022)}px`;
+    ctx.fillStyle = '#a0b0c0';
+    ctx.fillText(plusCode, tx, curY);
+    curY += base * 0.035;
+  }
+
+  // Date & Time
+  const dateStr = now.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'short', day: 'numeric' });
+  const timeStr = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  ctx.font = `${Math.round(base * 0.022)}px sans-serif`;
+  ctx.fillStyle = '#a0b0c0';
+  ctx.fillText(`${dateStr} ${timeStr}`, tx, curY);
+  curY += base * 0.04;
+
+  // User Note
+  const note = els.userNote.value.trim();
+  if (note) {
+    ctx.font = `italic ${Math.round(base * 0.022)}px sans-serif`;
+    ctx.fillStyle = '#d0dae5';
+    ctx.fillText(`Note: ${note}`, tx, curY);
+    curY += base * 0.035;
+  }
+
+  // 4. Metrics Bar (Bottom of the box)
+  const metricY = by + boxH - pad * 1.2;
+  ctx.strokeStyle = '#2a3b4c';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(tx, metricY - base * 0.025);
+  ctx.lineTo(bx + boxW - pad, metricY - base * 0.025);
+  ctx.stroke();
+
+  ctx.font = `${Math.round(base * 0.02)}px sans-serif`;
+  ctx.fillStyle = '#e0e8f0';
+  
+  const metricSpacing = textMaxW / 3;
+  const m1 = tx;
+  const m2 = tx + metricSpacing;
+  const m3 = tx + metricSpacing * 2;
+
+  const alt = p && p.altitude != null ? p.altitude.toFixed(0) + ' m' : '-- m';
+  const acc = p && p.accuracy != null ? '±' + p.accuracy.toFixed(0) + ' m' : '-- m';
+  const head = p && p.heading != null ? p.heading.toFixed(0) + '°' : '--°';
+
+  ctx.fillText(`⛰ ${alt}`, m1, metricY);
+  ctx.fillText(`🎯 ${acc}`, m2, metricY);
+  ctx.fillText(`🧭 ${head}`, m3, metricY);
 }
 
 /* =========================================================
@@ -497,7 +605,6 @@ function buildExifTiff(pos, date) {
     return b;
   };
 
-  // [num, den] pairs -> bytes (little endian)
   const rationalsBytes = (pairs) => {
     const b = new Uint8Array(pairs.length * 8);
     const dv = new DataView(b.buffer);
@@ -521,7 +628,6 @@ function buildExifTiff(pos, date) {
 
   const lat = pos.lat, lon = pos.lon, alt = pos.altitude;
 
-  // ---- GPS IFD ----
   const gps = [];
   gps.push({ tag: 0x0000, type: 1, count: 4, data: new Uint8Array([2, 3, 0, 0]) });
   gps.push({ tag: 0x0001, type: 2, count: 2, data: ascii(lat >= 0 ? 'N\u0000' : 'S\u0000') });
@@ -546,24 +652,21 @@ function buildExifTiff(pos, date) {
     `${date.getFullYear()}:${pad2(date.getMonth() + 1)}:${pad2(date.getDate())}\u0000`;
   gps.push({ tag: 0x001D, type: 2, count: 11, data: ascii(dateStamp) });
 
-  // ---- IFD0 ----
   const dateTimeStr =
     `${date.getFullYear()}:${pad2(date.getMonth() + 1)}:${pad2(date.getDate())} ` +
     `${pad2(date.getHours())}:${pad2(date.getMinutes())}:${pad2(date.getSeconds())}\u0000`;
 
   const ifd0 = [
-    { tag: 0x0112, type: 3, count: 1, data: new Uint8Array([1, 0]) },              // Orientation
-    { tag: 0x0132, type: 2, count: 20, data: ascii(dateTimeStr) },                 // DateTime
+    { tag: 0x0112, type: 3, count: 1, data: new Uint8Array([1, 0]) },
+    { tag: 0x0132, type: 2, count: 20, data: ascii(dateTimeStr) },
   ];
 
-  // ---- Layout ----
   const IFD0_OFFSET = 8;
-  const n0 = ifd0.length + 1;                                   // +1 for GPS pointer
+  const n0 = ifd0.length + 1;
   const GPS_IFD_OFFSET = IFD0_OFFSET + 2 + n0 * 12 + 4;
   const nG = gps.length;
   let cursor = GPS_IFD_OFFSET + 2 + nG * 12 + 4;
 
-  // GPS pointer entry (LONG, inline)
   const ptr = new Uint8Array(4);
   new DataView(ptr.buffer).setUint32(0, GPS_IFD_OFFSET, true);
   ifd0.push({ tag: 0x8825, type: 4, count: 1, data: ptr });
@@ -576,7 +679,7 @@ function buildExifTiff(pos, date) {
     entry.offset = cursor;
     chunks.push({ offset: cursor, data: d });
     cursor += d.length;
-    if (cursor % 2) cursor++;     // word alignment
+    if (cursor % 2) cursor++;
   };
   ifd0.forEach(assign);
   gps.forEach(assign);
@@ -584,7 +687,6 @@ function buildExifTiff(pos, date) {
   const out = new Uint8Array(cursor);
   const dv = new DataView(out.buffer);
 
-  // TIFF header: little-endian
   out[0] = 0x49; out[1] = 0x49;
   dv.setUint16(2, 0x002A, true);
   dv.setUint32(4, IFD0_OFFSET, true);
@@ -597,13 +699,13 @@ function buildExifTiff(pos, date) {
       dv.setUint16(p + 2, e.type, true);
       dv.setUint32(p + 4, e.count, true);
       if (e.inline) {
-        out.set(e.data, p + 8);           // remaining bytes stay 0
+        out.set(e.data, p + 8);
       } else {
         dv.setUint32(p + 8, e.offset, true);
       }
       p += 12;
     }
-    dv.setUint32(p, 0, true);             // next IFD = none
+    dv.setUint32(p, 0, true);
   };
 
   writeIFD(IFD0_OFFSET, ifd0);
@@ -615,11 +717,11 @@ function buildExifTiff(pos, date) {
 
 function injectApp1(jpegBuffer, tiffBytes) {
   const src = new Uint8Array(jpegBuffer);
-  if (src.length < 4 || src[0] !== 0xFF || src[1] !== 0xD8) return src; // not a JPEG
+  if (src.length < 4 || src[0] !== 0xFF || src[1] !== 0xD8) return src;
 
-  const exifId = [0x45, 0x78, 0x69, 0x66, 0x00, 0x00];  // "Exif\0\0"
+  const exifId = [0x45, 0x78, 0x69, 0x66, 0x00, 0x00];
   const payload = exifId.length + tiffBytes.length;
-  const app1Len = payload + 2;                           // length field includes itself
+  const app1Len = payload + 2;
 
   const app1 = new Uint8Array(2 + app1Len);
   app1[0] = 0xFF; app1[1] = 0xE1;
@@ -629,9 +731,9 @@ function injectApp1(jpegBuffer, tiffBytes) {
   app1.set(tiffBytes, 4 + exifId.length);
 
   const out = new Uint8Array(src.length + app1.length);
-  out.set(src.subarray(0, 2), 0);                        // SOI
-  out.set(app1, 2);                                      // APP1
-  out.set(src.subarray(2), 2 + app1.length);             // rest
+  out.set(src.subarray(0, 2), 0);
+  out.set(app1, 2);
+  out.set(src.subarray(2), 2 + app1.length);
   return out;
 }
 
@@ -691,10 +793,8 @@ function renderGallery() {
   }
 
   els.gallery.innerHTML = '';
-  // newest first
   for (let i = state.items.length - 1; i >= 0; i--) {
     const it = state.items[i];
-
     const row = document.createElement('div');
     row.className = 'item';
 
@@ -781,7 +881,6 @@ async function capturePhoto() {
 
   if (els.chkOverlay.checked) drawWatermark(ctx, w, h);
 
-  // shutter flash
   els.flash.classList.add('go');
   requestAnimationFrame(() => els.flash.classList.remove('go'));
 
@@ -814,7 +913,9 @@ function buildMeta(kind, extra = {}) {
     type: kind,
     capturedAt: new Date().toISOString(),
     capturedAtLocal: formatDateTime(new Date()),
-    label: els.labelInput.value.trim() || null,
+    locationName: els.locationName.value.trim() || null,
+    userNote: els.userNote.value.trim() || null,
+    plusCode: p ? encodePlusCode(p.lat, p.lon) : null,
     location: p ? {
       latitude: p.lat,
       longitude: p.lon,
@@ -874,16 +975,13 @@ function startRecording() {
     canvas.height = h;
     ctx = canvas.getContext('2d', { alpha: false });
     recordStream = canvas.captureStream(30);
-    // Burn the current frame immediately so recording never starts black.
     drawVideoFrame(ctx, w, h);
   } else {
-    // Fallback: record the raw camera stream (no burned-in overlay).
     recordStream = new MediaStream();
     state.stream.getVideoTracks().forEach(t => recordStream.addTrack(t));
     setStatus('Canvas capture unsupported — recording raw camera feed.', 'err');
   }
 
-  // Attach microphone audio
   const audioTracks = state.stream.getAudioTracks();
   audioTracks.forEach(t => recordStream.addTrack(t));
 
@@ -945,7 +1043,6 @@ function startRecording() {
     state.chunks = [];
   };
 
-  // ---- Draw loop ----
   state.recUsingRVFC = 'requestVideoFrameCallback' in HTMLVideoElement.prototype;
   const loop = () => {
     if (!state.recording) return;
@@ -967,8 +1064,7 @@ function startRecording() {
   }
 
   loop();
-
-  recorder.start(1000); // collect chunks every second
+  recorder.start(1000);
 
   els.btnRec.innerHTML = '<span class="icon">⏹</span> Stop recording';
   els.btnPhoto.disabled = true;
@@ -1036,7 +1132,8 @@ els.chkAudio.addEventListener('change', async () => {
   }
 });
 
-els.labelInput.addEventListener('input', updateHud);
+els.locationName.addEventListener('input', updateHud);
+els.userNote.addEventListener('input', updateHud);
 
 window.addEventListener('beforeunload', () => {
   stopRecording();
@@ -1045,7 +1142,6 @@ window.addEventListener('beforeunload', () => {
   state.items.forEach(it => { try { URL.revokeObjectURL(it.url); } catch (_) {} });
 });
 
-// Spacebar shortcut = photo, R = record toggle (desktop convenience)
 window.addEventListener('keydown', (e) => {
   if (e.target.tagName === 'INPUT') return;
   if (e.code === 'Space' && !els.btnPhoto.disabled) { e.preventDefault(); els.btnPhoto.click(); }
