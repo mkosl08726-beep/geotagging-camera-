@@ -22,14 +22,12 @@
     font: 15px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   }
 
-  /* Full Screen Camera */
   #preview {
     position: absolute; top: 0; left: 0; width: 100%; height: 100%;
     object-fit: cover; background: #000; z-index: 1;
   }
   #preview.mirror { transform: scaleX(-1); }
 
-  /* Top HUD */
   #hud {
     position: absolute; top: 20px; left: 20px; right: 20px; z-index: 10;
     pointer-events: none; display: flex; flex-direction: column; gap: 6px;
@@ -44,7 +42,6 @@
   .hud-badge.ok { color: var(--accent); }
   .hud-badge.err { color: var(--danger); }
 
-  /* Bottom Controls */
   #controls {
     position: absolute; bottom: 0; left: 0; right: 0; z-index: 10;
     padding: 30px 20px 50px 20px;
@@ -60,7 +57,6 @@
   .btn-icon:active { background: rgba(255,255,255,0.3); transform: scale(0.95); }
   .btn-icon:disabled { opacity: 0.3; }
 
-  /* Shutter Button */
   .shutter-wrap {
     position: relative; width: 80px; height: 80px;
     display: flex; align-items: center; justify-content: center;
@@ -72,9 +68,7 @@
   }
   .shutter:active { background: rgba(255,255,255,0.5); transform: scale(0.95); }
   .shutter:disabled { opacity: 0.3; }
-  .shutter.recording { border-color: var(--danger); background: var(--danger); animation: pulse 1.5s infinite; }
 
-  /* Record Button */
   .btn-record {
     width: 50px; height: 50px; border-radius: 50%;
     border: 2px solid var(--danger); background: transparent;
@@ -86,7 +80,6 @@
   .btn-record:active { transform: scale(0.9); }
   .btn-record:disabled { opacity: 0.3; }
 
-  /* Recording Timer */
   #recTimer {
     position: absolute; top: 20px; left: 50%; transform: translateX(-50%);
     background: rgba(0,0,0,0.7); color: var(--danger); font-weight: bold;
@@ -96,7 +89,6 @@
   #recTimer.on { display: flex; }
   #recTimer .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--danger); animation: pulse 1s infinite; }
 
-  /* Start Overlay */
   #startOverlay {
     position: absolute; inset: 0; z-index: 20;
     background: rgba(0,0,0,0.8); backdrop-filter: blur(6px);
@@ -114,7 +106,6 @@
   }
   .btn-primary:active { transform: scale(0.96); }
 
-  /* Settings & Gallery Panels */
   .panel {
     position: absolute; top: 0; right: -100%; width: 100%; max-width: 360px; height: 100%;
     background: var(--panel); z-index: 30; transition: right 0.3s ease;
@@ -160,27 +151,22 @@
 
   @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
 
-  /* Flash Effect */
   #flash { position: absolute; inset: 0; background: #fff; opacity: 0; pointer-events: none; z-index: 5; transition: opacity 0.1s; }
   #flash.go { opacity: 0.9; transition: none; }
 </style>
 </head>
 <body>
 
-<!-- Camera Preview -->
 <video id="preview" autoplay playsinline muted></video>
 <div id="flash"></div>
 
-<!-- Top HUD -->
 <div id="hud">
   <div class="hud-badge" id="gpsStatus">📍 Waiting for GPS...</div>
   <div class="hud-badge" id="secBadge" style="color: var(--muted);">🔒 Secure context</div>
 </div>
 
-<!-- Recording Timer -->
 <div id="recTimer"><span class="dot"></span><span id="recTime">00:00</span></div>
 
-<!-- Bottom Controls -->
 <div id="controls">
   <button class="btn-icon" id="btnGallery" title="Gallery">🖼️</button>
   
@@ -194,15 +180,13 @@
   </div>
 </div>
 
-<!-- Start Overlay -->
 <div id="startOverlay">
   <h1>GeoCam</h1>
   <p>Geotagged photos & videos directly to your device.</p>
   <button class="btn-primary" id="btnStart">Start Camera & GPS</button>
-  <p style="font-size: 11px; margin-top: 10px;">Requires HTTPS or localhost</p>
+  <p style="font-size: 11px; margin-top: 10px;">Microphone will only be requested when you record video</p>
 </div>
 
-<!-- Settings Panel -->
 <div class="panel" id="settingsPanel">
   <div class="panel-header">
     <h2>Settings</h2>
@@ -210,7 +194,7 @@
   </div>
   <div class="panel-body">
     <div class="field">
-      <label for="locationName">Location Name</label>
+      <label for="locationName">Custom Location Name (Overrides GPS)</label>
       <input type="text" id="locationName" placeholder="e.g. Treetop Hideaways" maxlength="40">
     </div>
     <div class="field">
@@ -219,12 +203,11 @@
     </div>
     <label class="switch"><input type="checkbox" id="chkOverlay" checked> Burn rich watermark</label>
     <label class="switch"><input type="checkbox" id="chkExif" checked> Write EXIF GPS into JPEG</label>
-    <label class="switch"><input type="checkbox" id="chkAudio" checked> Record microphone with video</label>
+    <label class="switch"><input type="checkbox" id="chkAudio" checked> Enable microphone for video</label>
     <button class="btn-primary" id="btnSwitchCam" style="width: 100%; margin-top: 20px; background: linear-gradient(180deg, #3aa0ff, #2b7ddb); color: #031a30;">Switch Camera</button>
   </div>
 </div>
 
-<!-- Gallery Panel -->
 <div class="panel" id="galleryPanel">
   <div class="panel-header">
     <h2>Captured (<span id="count">0</span>)</h2>
@@ -240,9 +223,6 @@
 <script>
 'use strict';
 
-/* =========================================================
-   0. Helpers & State
-   ========================================================= */
 const $ = (s) => document.querySelector(s);
 
 const els = {
@@ -289,6 +269,8 @@ const state = {
   itemSeq: 0,
   mapTileImg: new Image(),
   mapTileLoaded: false,
+  resolvedAddress: null,
+  audioTrack: null, // <--- CRITICAL: Track audio globally to ensure it's stopped
 };
 
 state.mapTileImg.crossOrigin = "anonymous";
@@ -305,37 +287,26 @@ function formatCoords(lat, lon) {
          `${Math.abs(lon).toFixed(6)}° ${lon >= 0 ? 'E' : 'W'}`;
 }
 
-/* =========================================================
-   Plus Code Generator
-   ========================================================= */
 function encodePlusCode(lat, lon) {
   const alphabet = '23456789CFGHJMPQRVWX';
-  let latVal = lat + 90;
-  let lonVal = lon + 180;
-  let code = '';
-  let latRes = 20, lonRes = 20;
-
+  let latVal = lat + 90; let lonVal = lon + 180;
+  let code = ''; let latRes = 20, lonRes = 20;
   for (let i = 0; i < 4; i++) {
     const latDigit = Math.floor(latVal / latRes);
     const lonDigit = Math.floor(lonVal / lonRes);
     code += alphabet[latDigit] + alphabet[lonDigit];
-    latVal %= latRes; lonVal %= lonRes;
-    latRes /= 20; lonRes /= 20;
+    latVal %= latRes; lonVal %= lonRes; latRes /= 20; lonRes /= 20;
   }
   latRes = 0.05; lonRes = 0.05;
   for (let i = 0; i < 1; i++) {
     const latDigit = Math.floor(latVal / latRes);
     const lonDigit = Math.floor(lonVal / lonRes);
     code += alphabet[latDigit] + alphabet[lonDigit];
-    latVal %= latRes; lonVal %= lonRes;
-    latRes /= 20; lonRes /= 20;
+    latVal %= latRes; lonVal %= lonRes; latRes /= 20; lonRes /= 20;
   }
   return code.slice(0, 8) + '+' + code.slice(8);
 }
 
-/* =========================================================
-   1. Security Check
-   ========================================================= */
 (function checkSecure() {
   if (!window.isSecureContext) {
     els.secBadge.textContent = '⚠️ Insecure context';
@@ -345,7 +316,30 @@ function encodePlusCode(lat, lon) {
 })();
 
 /* =========================================================
-   2. Map Tile Fetcher
+   REVERSE GEOCODING (Convert Lat/Lon to Address)
+   ========================================================= */
+async function fetchLocationName(lat, lon) {
+  if (els.locationName.value.trim() !== '') return;
+  setStatus('📍 Resolving address...', '');
+  try {
+    const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lon}`, {
+      headers: { 'User-Agent': 'GeoCam/1.0' }
+    });
+    const data = await res.json();
+    if (data && data.display_name) {
+      const parts = data.display_name.split(', ');
+      state.resolvedAddress = parts.slice(0, 3).join(', ');
+    } else {
+      state.resolvedAddress = 'Unknown Area';
+    }
+  } catch (err) {
+    console.warn('Reverse geocoding failed:', err);
+    state.resolvedAddress = 'Network Error';
+  }
+}
+
+/* =========================================================
+   MAP TILE FETCHER
    ========================================================= */
 function lon2tile(lon, zoom) { return (Math.floor((lon + 180) / 360 * Math.pow(2, zoom))); }
 function lat2tile(lat, zoom) { return (Math.floor((1 - Math.log(Math.tan(lat * Math.PI / 180) + 1 / Math.cos(lat * Math.PI / 180)) / Math.PI) / 2 * Math.pow(2, zoom))); }
@@ -361,31 +355,25 @@ function updateMapTile(lat, lon) {
 state.mapTileImg.onload = () => { state.mapTileLoaded = true; };
 state.mapTileImg.onerror = () => { state.mapTileLoaded = false; };
 
-/* =========================================================
-   3. Geolocation
-   ========================================================= */
 function startGeolocation() {
-  if (!('geolocation' in navigator)) {
-    setStatus('Geolocation not supported', 'err');
-    return;
-  }
+  if (!('geolocation' in navigator)) { setStatus('Geolocation not supported', 'err'); return; }
   if (state.watchId !== null) return;
 
   state.watchId = navigator.geolocation.watchPosition(
     (pos) => {
       state.position = {
-        lat: pos.coords.latitude,
-        lon: pos.coords.longitude,
-        accuracy: pos.coords.accuracy,
-        altitude: pos.coords.altitude,
-        altitudeAccuracy: pos.coords.altitudeAccuracy,
-        heading: pos.coords.heading,
-        speed: pos.coords.speed,
-        timestamp: pos.timestamp,
+        lat: pos.coords.latitude, lon: pos.coords.longitude,
+        accuracy: pos.coords.accuracy, altitude: pos.coords.altitude,
+        altitudeAccuracy: pos.coords.altitudeAccuracy, heading: pos.coords.heading,
+        speed: pos.coords.speed, timestamp: pos.timestamp,
       };
       state.geoError = null;
       setStatus(`📍 ±${Math.round(pos.coords.accuracy)}m`, 'ok');
       updateMapTile(pos.coords.latitude, pos.coords.longitude);
+      
+      if (!state.resolvedAddress || state.resolvedAddress === 'Unknown Area' || state.resolvedAddress === 'Network Error') {
+        fetchLocationName(pos.coords.latitude, pos.coords.longitude);
+      }
     },
     (err) => {
       state.geoError = err.message || 'Location error';
@@ -396,19 +384,15 @@ function startGeolocation() {
 }
 
 function stopGeolocation() {
-  if (state.watchId !== null) {
-    navigator.geolocation.clearWatch(state.watchId);
-    state.watchId = null;
-  }
+  if (state.watchId !== null) { navigator.geolocation.clearWatch(state.watchId); state.watchId = null; }
 }
 
 /* =========================================================
-   4. Camera
+   CAMERA (Video Only — Mic is requested separately)
    ========================================================= */
 async function startCamera() {
-  stopCamera();
+  stopCamera(); // Ensure everything is clean before starting
 
-  const wantAudio = els.chkAudio.checked;
   const baseVideo = {
     facingMode: { ideal: state.facingMode },
     width:  { ideal: 1920 },
@@ -417,25 +401,10 @@ async function startCamera() {
 
   let stream = null;
   try {
-    stream = await navigator.mediaDevices.getUserMedia({
-      video: baseVideo,
-      audio: wantAudio
-        ? { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
-        : false,
-    });
+    stream = await navigator.mediaDevices.getUserMedia({ video: baseVideo, audio: false });
   } catch (err) {
-    if (wantAudio) {
-      try {
-        stream = await navigator.mediaDevices.getUserMedia({ video: baseVideo, audio: false });
-        setStatus('Camera on (no mic)', 'err');
-      } catch (err2) {
-        setStatus('Camera error: ' + (err2.message || err2.name), 'err');
-        return;
-      }
-    } else {
-      setStatus('Camera error: ' + (err.message || err.name), 'err');
-      return;
-    }
+    setStatus('Camera error: ' + (err.message || err.name), 'err');
+    return;
   }
 
   state.stream = stream;
@@ -454,7 +423,16 @@ async function startCamera() {
 }
 
 function stopCamera() {
+  // 1. Force stop recording if active
   if (state.recording) stopRecording();
+  
+  // 2. Hard stop the audio track if it exists (Privacy Fix)
+  if (state.audioTrack) {
+    state.audioTrack.stop();
+    state.audioTrack = null;
+  }
+
+  // 3. Stop the video stream
   if (state.stream) {
     state.stream.getTracks().forEach(t => t.stop());
     state.stream = null;
@@ -468,14 +446,11 @@ async function switchCamera() {
 }
 
 /* =========================================================
-   5. Watermark Drawing (with Real Map)
+   WATERMARK DRAWING (Transparency & Rounded Corners)
    ========================================================= */
 function roundRectPath(ctx, x, y, w, h, r) {
-  if (typeof ctx.roundRect === 'function') {
-    ctx.beginPath(); ctx.roundRect(x, y, w, h, r); return;
-  }
-  ctx.beginPath();
-  ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r);
+  if (typeof ctx.roundRect === 'function') { ctx.beginPath(); ctx.roundRect(x, y, w, h, r); return; }
+  ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r);
   ctx.arcTo(x + w, y + h, x, y + h, r); ctx.arcTo(x, y + h, x, y, r);
   ctx.arcTo(x, y, x + w, y, r); ctx.closePath();
 }
@@ -497,25 +472,27 @@ function drawWatermark(ctx, w, h) {
   
   const tx = mx + mapSize + pad;
   const ty = my + pad;
-  const textMaxW = boxW - pad * 2 - mapSize - pad;
 
-  // 1. Main background panel
-  ctx.fillStyle = 'rgba(15, 20, 25, 0.88)';
-  roundRectPath(ctx, bx, by, boxW, boxH, 12);
+  // 1. Main background panel (More transparent + Rounder corners)
+  ctx.fillStyle = 'rgba(15, 20, 25, 0.65)'; 
+  roundRectPath(ctx, bx, by, boxW, boxH, 20); 
   ctx.fill();
+  
+  // Subtle border for readability
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
+  ctx.lineWidth = 1.5;
+  roundRectPath(ctx, bx, by, boxW, boxH, 20);
+  ctx.stroke();
 
   // 2. Map Area
   ctx.save();
-  roundRectPath(ctx, mx, my, mapSize, mapSize, 8);
+  roundRectPath(ctx, mx, my, mapSize, mapSize, 12); 
   ctx.clip();
 
   if (state.mapTileLoaded && p) {
-    // Draw real map tile
     const zoom = 16;
     const tileX = lon2tile(p.lon, zoom);
     const tileY = lat2tile(p.lat, zoom);
-    
-    // Calculate exact pixel position within the tile
     const pixelX = ((p.lon + 180) / 360 * Math.pow(2, zoom) - tileX) * 256;
     const pixelY = ((1 - Math.log(Math.tan(p.lat * Math.PI / 180) + 1 / Math.cos(p.lat * Math.PI / 180)) / Math.PI) / 2 * Math.pow(2, zoom) - tileY) * 256;
 
@@ -524,7 +501,6 @@ function drawWatermark(ctx, w, h) {
 
     ctx.drawImage(state.mapTileImg, mx + offsetX, my + offsetY, 256, 256);
 
-    // Draw Pin
     const pinX = mx + mapSize / 2;
     const pinY = my + mapSize / 2;
     ctx.fillStyle = 'rgba(255, 77, 94, 0.4)';
@@ -532,7 +508,6 @@ function drawWatermark(ctx, w, h) {
     ctx.fillStyle = '#ff4d5e';
     ctx.beginPath(); ctx.arc(pinX, pinY, base * 0.012, 0, Math.PI * 2); ctx.fill();
   } else {
-    // Fallback: Simulated map grid
     ctx.fillStyle = '#1a2634'; ctx.fillRect(mx, my, mapSize, mapSize);
     ctx.strokeStyle = '#2a3b4c'; ctx.lineWidth = Math.max(2, base * 0.003);
     ctx.beginPath();
@@ -541,7 +516,6 @@ function drawWatermark(ctx, w, h) {
     ctx.moveTo(mx, my + mapSize * 0.7); ctx.lineTo(mx + mapSize, my + mapSize * 0.7);
     ctx.moveTo(mx + mapSize * 0.8, my); ctx.lineTo(mx + mapSize * 0.8, my + mapSize);
     ctx.stroke();
-    // Pin
     const pinX = mx + mapSize * 0.5, pinY = my + mapSize * 0.5;
     ctx.fillStyle = 'rgba(255, 77, 94, 0.3)'; ctx.beginPath(); ctx.arc(pinX, pinY, base * 0.025, 0, Math.PI * 2); ctx.fill();
     ctx.fillStyle = '#ff4d5e'; ctx.beginPath(); ctx.arc(pinX, pinY, base * 0.01, 0, Math.PI * 2); ctx.fill();
@@ -551,21 +525,26 @@ function drawWatermark(ctx, w, h) {
   // 3. Text Information
   let curY = ty;
   
-  const locName = els.locationName.value.trim() || 'Unknown Location';
+  let locName = els.locationName.value.trim();
+  if (!locName) locName = state.resolvedAddress || 'Fetching location...';
+  
   ctx.font = `bold ${Math.round(base * 0.035)}px sans-serif`;
   ctx.fillStyle = '#ffffff';
+  ctx.shadowColor = 'rgba(0,0,0,0.8)';
+  ctx.shadowBlur = 4;
   ctx.fillText(locName, tx, curY);
+  ctx.shadowBlur = 0; 
   curY += base * 0.045;
 
   if (p) {
     ctx.font = `${Math.round(base * 0.022)}px sans-serif`;
-    ctx.fillStyle = '#a0b0c0';
+    ctx.fillStyle = '#d0dae5';
     ctx.fillText(formatCoords(p.lat, p.lon), tx, curY);
     curY += base * 0.035;
 
     const plusCode = encodePlusCode(p.lat, p.lon);
     ctx.font = `monospace ${Math.round(base * 0.022)}px`;
-    ctx.fillStyle = '#a0b0c0';
+    ctx.fillStyle = '#d0dae5';
     ctx.fillText(plusCode, tx, curY);
     curY += base * 0.035;
   }
@@ -580,13 +559,13 @@ function drawWatermark(ctx, w, h) {
   const note = els.userNote.value.trim();
   if (note) {
     ctx.font = `italic ${Math.round(base * 0.022)}px sans-serif`;
-    ctx.fillStyle = '#d0dae5';
+    ctx.fillStyle = '#ffffff';
     ctx.fillText(`Note: ${note}`, tx, curY);
   }
 }
 
 /* =========================================================
-   6. EXIF Writer
+   EXIF WRITER
    ========================================================= */
 function buildExifTiff(pos, date) {
   const ascii = (s) => { const b = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) b[i] = s.charCodeAt(i) & 0xFF; return b; };
@@ -688,7 +667,7 @@ async function withExifGps(blob, pos, date) {
 }
 
 /* =========================================================
-   7. File Saving
+   FILE SAVING
    ========================================================= */
 function geoSlug() { const p = state.position; return p ? `${p.lat.toFixed(5)}_${p.lon.toFixed(5)}` : 'nogps'; }
 function buildFilename(kind, ext) { const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19); return `geocam_${kind}_${stamp}_${geoSlug()}.${ext}`; }
@@ -702,7 +681,7 @@ function saveBlob(blob, filename) {
 }
 
 /* =========================================================
-   8. Gallery
+   GALLERY
    ========================================================= */
 function addItem({ kind, blob, url, filename, meta }) {
   const id = ++state.itemSeq;
@@ -741,7 +720,7 @@ function renderGallery() {
 }
 
 /* =========================================================
-   9. Photo Capture
+   PHOTO CAPTURE
    ========================================================= */
 async function capturePhoto() {
   if (!state.stream) return;
@@ -774,7 +753,7 @@ function buildMeta(kind, extra = {}) {
   const p = state.position;
   return {
     type: kind, capturedAt: new Date().toISOString(),
-    locationName: els.locationName.value.trim() || null,
+    locationName: els.locationName.value.trim() || state.resolvedAddress || null,
     userNote: els.userNote.value.trim() || null,
     plusCode: p ? encodePlusCode(p.lat, p.lon) : null,
     location: p ? { latitude: p.lat, longitude: p.lon, accuracyMeters: p.accuracy, altitudeMeters: p.altitude, headingDegrees: p.heading, speedMetersPerSecond: p.speed } : null,
@@ -785,7 +764,7 @@ function buildMeta(kind, extra = {}) {
 }
 
 /* =========================================================
-   10. Video Recording
+   VIDEO RECORDING (Audio requested on demand + Strict Cleanup)
    ========================================================= */
 function pickVideoMime() {
   const c = ['video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm', 'video/mp4;codecs=avc1.42E01E,mp4a.40.2', 'video/mp4'];
@@ -794,32 +773,59 @@ function pickVideoMime() {
   return '';
 }
 
-function startRecording() {
+async function startRecording() {
   if (!state.stream || state.recording) return;
   const v = els.video; const w = v.videoWidth || 1280; const h = v.videoHeight || 720;
-  let recordStream, canvas, ctx;
-  const canCanvasCapture = typeof HTMLCanvasElement !== 'undefined' && typeof HTMLCanvasElement.prototype.captureStream === 'function';
+  let recordStream = new MediaStream();
+  
+  const canvas = document.createElement('canvas');
+  canvas.width = w; canvas.height = h;
+  const ctx = canvas.getContext('2d', { alpha: false });
+  
+  ctx.save();
+  if (state.facingMode === 'user') { ctx.translate(w, 0); ctx.scale(-1, 1); }
+  ctx.drawImage(v, 0, 0, w, h);
+  ctx.restore();
+  if (els.chkOverlay.checked) drawWatermark(ctx, w, h);
+  
+  const canvasStream = canvas.captureStream(30);
+  canvasStream.getVideoTracks().forEach(t => recordStream.addTrack(t));
 
-  if (canCanvasCapture) {
-    canvas = document.createElement('canvas'); canvas.width = w; canvas.height = h;
-    ctx = canvas.getContext('2d', { alpha: false }); recordStream = canvas.captureStream(30);
-    drawVideoFrame(ctx, w, h);
-  } else {
-    recordStream = new MediaStream(); state.stream.getVideoTracks().forEach(t => recordStream.addTrack(t));
+  // Request Microphone ONLY on demand
+  if (els.chkAudio.checked) {
+    try {
+      const audioStream = await navigator.mediaDevices.getUserMedia({ 
+        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } 
+      });
+      state.audioTrack = audioStream.getAudioTracks()[0]; // <--- Store globally
+      recordStream.addTrack(state.audioTrack);
+      setStatus('Mic active · Recording', 'ok');
+    } catch (err) {
+      setStatus('Mic denied, video only', 'err');
+    }
   }
-  state.stream.getAudioTracks().forEach(t => recordStream.addTrack(t));
 
   const mime = pickVideoMime();
   let recorder;
-  try { recorder = new MediaRecorder(recordStream, { ...(mime ? { mimeType: mime } : {}), videoBitsPerSecond: 6_000_000, audioBitsPerSecond: 128_000 }); }
-  catch (err) { try { recorder = new MediaRecorder(recordStream); } catch (err2) { return; } }
+  try { 
+    recorder = new MediaRecorder(recordStream, { 
+      ...(mime ? { mimeType: mime } : {}), 
+      videoBitsPerSecond: 6_000_000, 
+      audioBitsPerSecond: 128_000 
+    }); 
+  } catch (err) { 
+    try { recorder = new MediaRecorder(recordStream); } catch (err2) { return; } 
+  }
 
   state.chunks = []; state.recorder = recorder; state.recording = true; state.recStart = Date.now();
+  
   recorder.ondataavailable = (e) => { if (e.data && e.data.size) state.chunks.push(e.data); };
+  
   recorder.onstop = () => {
     const type = recorder.mimeType || 'video/webm'; const blob = new Blob(state.chunks, { type });
     const ext = type.includes('mp4') ? 'mp4' : 'webm'; const filename = buildFilename('video', ext);
     const durationMs = Date.now() - state.recStart; const url = saveBlob(blob, filename);
+    
     addItem({ kind: 'video', blob, url, filename, meta: buildMeta('video', { width: w, height: h, durationMs, bytes: blob.size, mimeType: type }) });
     state.chunks = [];
   };
@@ -827,17 +833,14 @@ function startRecording() {
   state.recUsingRVFC = 'requestVideoFrameCallback' in HTMLVideoElement.prototype;
   const loop = () => {
     if (!state.recording) return;
-    if (canvas && ctx) drawVideoFrame(ctx, w, h);
+    ctx.save();
+    if (state.facingMode === 'user') { ctx.translate(w, 0); ctx.scale(-1, 1); }
+    try { ctx.drawImage(v, 0, 0, w, h); } catch (_) {}
+    ctx.restore();
+    if (els.chkOverlay.checked) drawWatermark(ctx, w, h);
+    
     state.recFrameHandle = state.recUsingRVFC ? v.requestVideoFrameCallback(loop) : requestAnimationFrame(loop);
   };
-
-  function drawVideoFrame(context, cw, ch) {
-    context.save();
-    if (state.facingMode === 'user') { context.translate(cw, 0); context.scale(-1, 1); }
-    try { context.drawImage(v, 0, 0, cw, ch); } catch (_) {}
-    context.restore();
-    if (els.chkOverlay.checked) drawWatermark(context, cw, ch);
-  }
 
   loop(); recorder.start(1000);
   els.btnShutter.disabled = true;
@@ -853,35 +856,61 @@ function startRecording() {
 function stopRecording() {
   if (!state.recording) return;
   state.recording = false;
+
+  // CRITICAL PRIVACY FIX: Stop the microphone immediately
+  if (state.audioTrack) {
+    state.audioTrack.stop();
+    state.audioTrack = null;
+  }
+
   const v = els.video;
   if (state.recFrameHandle != null) {
     try { if (state.recUsingRVFC) v.cancelVideoFrameCallback(state.recFrameHandle); else cancelAnimationFrame(state.recFrameHandle); } catch (_) {}
     state.recFrameHandle = null;
   }
   clearInterval(state.recTicker); state.recTicker = null;
+  
   try { if (state.recorder && state.recorder.state !== 'inactive') state.recorder.stop(); } catch (err) {}
+  
   els.btnShutter.disabled = false;
   els.btnRecord.classList.remove('active');
   els.recTimer.classList.remove('on');
 }
 
 /* =========================================================
-   11. UI Event Wiring
+   UI EVENT WIRING + PRIVACY WATCHDOG
    ========================================================= */
 els.btnStart.addEventListener('click', async () => { await startCamera(); });
 els.btnSwitchCam.addEventListener('click', switchCamera);
 els.btnShutter.addEventListener('click', () => { capturePhoto().catch(e => console.error(e)); });
-els.btnRecord.addEventListener('click', () => { if (state.recording) stopRecording(); else startRecording(); });
+els.btnRecord.addEventListener('click', async () => { if (state.recording) stopRecording(); else await startRecording(); });
 
 els.btnSettings.addEventListener('click', () => els.settingsPanel.classList.add('open'));
 els.closeSettings.addEventListener('click', () => els.settingsPanel.classList.remove('open'));
 els.btnGallery.addEventListener('click', () => els.galleryPanel.classList.add('open'));
 els.closeGallery.addEventListener('click', () => els.galleryPanel.classList.remove('open'));
 
-els.chkAudio.addEventListener('change', async () => { if (state.stream) await startCamera(); });
+// Force cleanup when app is backgrounded or closed
+window.addEventListener('pagehide', () => {
+  stopRecording();
+  stopCamera();
+  stopGeolocation();
+});
+
+// Force cleanup when tab loses visibility (e.g., switching to WhatsApp)
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) {
+    console.log('App backgrounded — stopping all media streams for privacy.');
+    stopRecording();
+    stopCamera();
+    stopGeolocation();
+  }
+});
 
 window.addEventListener('beforeunload', () => {
-  stopRecording(); stopCamera(); stopGeolocation();
+  stopRecording();
+  stopCamera();
+  stopGeolocation();
   state.items.forEach(it => { try { URL.revokeObjectURL(it.url); } catch (_) {} });
 });
 
