@@ -42,6 +42,15 @@
   .hud-badge.ok { color: var(--accent); }
   .hud-badge.err { color: var(--danger); }
 
+  /* NEW: Emergency Stop Button */
+  #btnKillMic {
+    position: absolute; top: 20px; right: 20px; z-index: 25;
+    background: var(--danger); color: white; border: none;
+    padding: 10px 16px; border-radius: 10px; font-size: 14px; font-weight: 700;
+    cursor: pointer; display: none; box-shadow: 0 4px 12px rgba(255,77,94,0.4);
+  }
+  #btnKillMic.on { display: block; }
+
   #controls {
     position: absolute; bottom: 0; left: 0; right: 0; z-index: 10;
     padding: 30px 20px 50px 20px;
@@ -165,6 +174,9 @@
   <div class="hud-badge" id="secBadge" style="color: var(--muted);">🔒 Secure context</div>
 </div>
 
+<!-- Emergency Kill Mic Button -->
+<button id="btnKillMic">🛑 STOP MIC</button>
+
 <div id="recTimer"><span class="dot"></span><span id="recTime">00:00</span></div>
 
 <div id="controls">
@@ -236,6 +248,7 @@ const els = {
   btnSettings: $('#btnSettings'),
   btnStart: $('#btnStart'),
   btnSwitchCam: $('#btnSwitchCam'),
+  btnKillMic: $('#btnKillMic'),
   startOverlay: $('#startOverlay'),
   settingsPanel: $('#settingsPanel'),
   galleryPanel: $('#galleryPanel'),
@@ -270,7 +283,9 @@ const state = {
   mapTileImg: new Image(),
   mapTileLoaded: false,
   resolvedAddress: null,
-  audioTrack: null, // <--- CRITICAL: Track audio globally to ensure it's stopped
+  audioTrack: null,
+  lastFetchedLat: null,
+  lastFetchedLon: null,
 };
 
 state.mapTileImg.crossOrigin = "anonymous";
@@ -316,25 +331,41 @@ function encodePlusCode(lat, lon) {
 })();
 
 /* =========================================================
-   REVERSE GEOCODING (Convert Lat/Lon to Address)
+   REVERSE GEOCODING (BigDataCloud - Reliable & Free)
    ========================================================= */
 async function fetchLocationName(lat, lon) {
   if (els.locationName.value.trim() !== '') return;
-  setStatus('📍 Resolving address...', '');
+  
+  if (state.lastFetchedLat && state.lastFetchedLon) {
+    const dLat = Math.abs(lat - state.lastFetchedLat);
+    const dLon = Math.abs(lon - state.lastFetchedLon);
+    if (dLat < 0.0005 && dLon < 0.0005) return;
+  }
+
   try {
-    const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lon}`, {
-      headers: { 'User-Agent': 'GeoCam/1.0' }
-    });
+    setStatus('📍 Resolving...', '');
+    const res = await fetch(`https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lon}&localityLanguage=en`);
     const data = await res.json();
-    if (data && data.display_name) {
-      const parts = data.display_name.split(', ');
-      state.resolvedAddress = parts.slice(0, 3).join(', ');
+    
+    if (data) {
+      const parts = [];
+      if (data.locality) parts.push(data.locality);
+      if (data.city) parts.push(data.city);
+      if (data.principalSubdivision) parts.push(data.principalSubdivision);
+      if (data.countryName) parts.push(data.countryName);
+      
+      state.resolvedAddress = parts.length > 0 ? parts.join(', ') : 'Unknown Area';
     } else {
       state.resolvedAddress = 'Unknown Area';
     }
+    
+    state.lastFetchedLat = lat;
+    state.lastFetchedLon = lon;
+    setStatus(`📍 ${state.resolvedAddress}`, 'ok');
   } catch (err) {
     console.warn('Reverse geocoding failed:', err);
-    state.resolvedAddress = 'Network Error';
+    state.resolvedAddress = 'Unknown Location';
+    setStatus('📍 GPS Locked', 'ok');
   }
 }
 
@@ -371,9 +402,7 @@ function startGeolocation() {
       setStatus(`📍 ±${Math.round(pos.coords.accuracy)}m`, 'ok');
       updateMapTile(pos.coords.latitude, pos.coords.longitude);
       
-      if (!state.resolvedAddress || state.resolvedAddress === 'Unknown Area' || state.resolvedAddress === 'Network Error') {
-        fetchLocationName(pos.coords.latitude, pos.coords.longitude);
-      }
+      fetchLocationName(pos.coords.latitude, pos.coords.longitude);
     },
     (err) => {
       state.geoError = err.message || 'Location error';
@@ -388,10 +417,40 @@ function stopGeolocation() {
 }
 
 /* =========================================================
-   CAMERA (Video Only — Mic is requested separately)
+   CAMERA & MICROPHONE CLEANUP (Aggressive)
    ========================================================= */
+function forceStopAllMedia() {
+  // 1. Stop the emergency button
+  els.btnKillMic.classList.remove('on');
+  
+  // 2. Kill the microphone hardware immediately
+  if (state.audioTrack) {
+    try {
+      state.audioTrack.enabled = false;
+      state.audioTrack.stop();
+    } catch (e) {}
+    state.audioTrack = null;
+  }
+
+  // 3. Stop the video stream
+  if (state.stream) {
+    state.stream.getTracks().forEach(t => {
+      try { t.stop(); } catch (e) {}
+    });
+    state.stream = null;
+  }
+  els.video.srcObject = null;
+
+  // 4. Stop the recorder
+  if (state.recorder && state.recorder.state !== 'inactive') {
+    try { state.recorder.stop(); } catch (e) {}
+  }
+  state.recorder = null;
+  state.recording = false;
+}
+
 async function startCamera() {
-  stopCamera(); // Ensure everything is clean before starting
+  forceStopAllMedia(); 
 
   const baseVideo = {
     facingMode: { ideal: state.facingMode },
@@ -422,31 +481,13 @@ async function startCamera() {
   startGeolocation();
 }
 
-function stopCamera() {
-  // 1. Force stop recording if active
-  if (state.recording) stopRecording();
-  
-  // 2. Hard stop the audio track if it exists (Privacy Fix)
-  if (state.audioTrack) {
-    state.audioTrack.stop();
-    state.audioTrack = null;
-  }
-
-  // 3. Stop the video stream
-  if (state.stream) {
-    state.stream.getTracks().forEach(t => t.stop());
-    state.stream = null;
-  }
-  els.video.srcObject = null;
-}
-
 async function switchCamera() {
   state.facingMode = state.facingMode === 'environment' ? 'user' : 'environment';
   await startCamera();
 }
 
 /* =========================================================
-   WATERMARK DRAWING (Transparency & Rounded Corners)
+   WATERMARK DRAWING
    ========================================================= */
 function roundRectPath(ctx, x, y, w, h, r) {
   if (typeof ctx.roundRect === 'function') { ctx.beginPath(); ctx.roundRect(x, y, w, h, r); return; }
@@ -473,18 +514,15 @@ function drawWatermark(ctx, w, h) {
   const tx = mx + mapSize + pad;
   const ty = my + pad;
 
-  // 1. Main background panel (More transparent + Rounder corners)
   ctx.fillStyle = 'rgba(15, 20, 25, 0.65)'; 
   roundRectPath(ctx, bx, by, boxW, boxH, 20); 
   ctx.fill();
   
-  // Subtle border for readability
   ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
   ctx.lineWidth = 1.5;
   roundRectPath(ctx, bx, by, boxW, boxH, 20);
   ctx.stroke();
 
-  // 2. Map Area
   ctx.save();
   roundRectPath(ctx, mx, my, mapSize, mapSize, 12); 
   ctx.clip();
@@ -522,7 +560,6 @@ function drawWatermark(ctx, w, h) {
   }
   ctx.restore();
 
-  // 3. Text Information
   let curY = ty;
   
   let locName = els.locationName.value.trim();
@@ -794,14 +831,18 @@ async function startRecording() {
   // Request Microphone ONLY on demand
   if (els.chkAudio.checked) {
     try {
+      // Show the emergency stop button while we hold the mic
+      els.btnKillMic.classList.add('on');
+      
       const audioStream = await navigator.mediaDevices.getUserMedia({ 
         audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } 
       });
-      state.audioTrack = audioStream.getAudioTracks()[0]; // <--- Store globally
+      state.audioTrack = audioStream.getAudioTracks()[0];
       recordStream.addTrack(state.audioTrack);
       setStatus('Mic active · Recording', 'ok');
     } catch (err) {
       setStatus('Mic denied, video only', 'err');
+      els.btnKillMic.classList.remove('on');
     }
   }
 
@@ -859,9 +900,13 @@ function stopRecording() {
 
   // CRITICAL PRIVACY FIX: Stop the microphone immediately
   if (state.audioTrack) {
-    state.audioTrack.stop();
+    try {
+      state.audioTrack.enabled = false;
+      state.audioTrack.stop();
+    } catch (e) {}
     state.audioTrack = null;
   }
+  els.btnKillMic.classList.remove('on');
 
   const v = els.video;
   if (state.recFrameHandle != null) {
@@ -885,31 +930,33 @@ els.btnSwitchCam.addEventListener('click', switchCamera);
 els.btnShutter.addEventListener('click', () => { capturePhoto().catch(e => console.error(e)); });
 els.btnRecord.addEventListener('click', async () => { if (state.recording) stopRecording(); else await startRecording(); });
 
+// EMERGENCY STOP BUTTON
+els.btnKillMic.addEventListener('click', () => {
+  forceStopAllMedia();
+  setStatus('🛑 Mic forcibly stopped', 'err');
+});
+
 els.btnSettings.addEventListener('click', () => els.settingsPanel.classList.add('open'));
 els.closeSettings.addEventListener('click', () => els.settingsPanel.classList.remove('open'));
 els.btnGallery.addEventListener('click', () => els.galleryPanel.classList.add('open'));
 els.closeGallery.addEventListener('click', () => els.galleryPanel.classList.remove('open'));
 
-// Force cleanup when app is backgrounded or closed
+// Aggressive privacy watchdog: runs when app is backgrounded or closed
 window.addEventListener('pagehide', () => {
-  stopRecording();
-  stopCamera();
+  forceStopAllMedia();
   stopGeolocation();
 });
 
-// Force cleanup when tab loses visibility (e.g., switching to WhatsApp)
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) {
     console.log('App backgrounded — stopping all media streams for privacy.');
-    stopRecording();
-    stopCamera();
+    forceStopAllMedia();
     stopGeolocation();
   }
 });
 
 window.addEventListener('beforeunload', () => {
-  stopRecording();
-  stopCamera();
+  forceStopAllMedia();
   stopGeolocation();
   state.items.forEach(it => { try { URL.revokeObjectURL(it.url); } catch (_) {} });
 });
