@@ -1,0 +1,1059 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>GeoCam — Geotagged Photos &amp; Videos</title>
+<style>
+  :root{
+    --bg:#0b0f14; --panel:#121821; --panel2:#182130; --line:#26324a;
+    --text:#e6edf5; --muted:#8b9bb0; --accent:#35d0a5; --accent2:#3aa0ff;
+    --danger:#ff4d5e; --radius:16px;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;min-height:100%}
+  body{
+    background:radial-gradient(1100px 600px at 8% -10%,#16202c,#0b0f14 62%);
+    color:var(--text);font:15px/1.5 ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    min-height:100dvh;
+  }
+  header{
+    display:flex;align-items:center;gap:12px;flex-wrap:wrap;
+    padding:16px 22px;border-bottom:1px solid var(--line);
+    background:rgba(11,15,20,.7);backdrop-filter:blur(8px);
+    position:sticky;top:0;z-index:20;
+  }
+  .logo{font-weight:800;letter-spacing:.4px;font-size:18px}
+  .logo span{color:var(--accent)}
+  .badge{font-size:12px;color:var(--muted);border:1px solid var(--line);padding:2px 9px;border-radius:999px}
+  .spacer{flex:1}
+  main{display:grid;grid-template-columns:minmax(0,1fr) 350px;gap:18px;padding:18px;align-items:start}
+  @media (max-width:920px){main{grid-template-columns:1fr;padding:12px;gap:12px}}
+
+  .stage{
+    position:relative;background:#000;border:1px solid var(--line);
+    border-radius:var(--radius);overflow:hidden;aspect-ratio:16/9;
+    box-shadow:0 18px 50px -25px #000;
+  }
+  .stage video{width:100%;height:100%;object-fit:contain;display:block;background:#000}
+  .stage.mirror video{transform:scaleX(-1)}
+
+  .hud{
+    position:absolute;left:14px;bottom:14px;right:14px;pointer-events:none;
+    display:flex;flex-direction:column;gap:6px;align-items:flex-start;
+  }
+  .hud-box{
+    background:rgba(0,0,0,.55);border:1px solid rgba(255,255,255,.12);
+    border-radius:12px;padding:8px 12px;font-size:13px;line-height:1.45;
+    max-width:min(100%,560px);word-break:break-word;
+    border-left:3px solid var(--accent);
+  }
+  .hud-box .coords{font-weight:700;font-size:15px;letter-spacing:.2px}
+  .hud-box .meta{color:#c6d3e2;font-size:12px}
+  .hud-box .ts{color:#9fb0c4;font-size:12px;font-variant-numeric:tabular-nums}
+  .hud-box .lbl{color:#ffd479;font-size:12px;font-weight:600}
+
+  .rec-pill{
+    position:absolute;top:14px;left:14px;display:none;align-items:center;gap:8px;
+    background:rgba(0,0,0,.6);border:1px solid rgba(255,255,255,.15);
+    padding:6px 12px;border-radius:999px;font-size:13px;font-weight:600;
+    font-variant-numeric:tabular-nums;
+  }
+  .rec-pill.on{display:flex}
+  .dot{width:9px;height:9px;border-radius:50%;background:var(--danger);animation:pulse 1.1s infinite}
+  @keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.35;transform:scale(.8)}}
+
+  .flash{position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none;transition:opacity .12s}
+  .flash.go{opacity:.85;transition:none}
+
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:16px}
+  .panel h2{margin:0 0 12px;font-size:13px;text-transform:uppercase;letter-spacing:1.2px;color:var(--muted);font-weight:700}
+
+  .btns{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px}
+  button{
+    font:inherit;font-weight:600;cursor:pointer;border-radius:12px;border:1px solid var(--line);
+    background:var(--panel2);color:var(--text);padding:12px 10px;transition:.15s;
+    display:flex;align-items:center;justify-content:center;gap:7px;
+  }
+  button:hover:not(:disabled){border-color:#3d5170;transform:translateY(-1px)}
+  button:active:not(:disabled){transform:translateY(0)}
+  button:disabled{opacity:.4;cursor:not-allowed}
+  button.primary{background:linear-gradient(180deg,#35d0a5,#25a884);color:#04231b;border-color:transparent}
+  button.shoot{background:linear-gradient(180deg,#3aa0ff,#2b7ddb);color:#031a30;border-color:transparent}
+  button.rec{background:linear-gradient(180deg,#ff5c6c,#d93a4b);color:#2b0409;border-color:transparent}
+  button.wide{grid-column:1/-1}
+  button.icon{font-size:17px;line-height:1}
+
+  .field{display:flex;flex-direction:column;gap:6px;margin-bottom:12px}
+  .field label{font-size:12px;color:var(--muted);font-weight:600;letter-spacing:.4px}
+  input[type=text]{
+    width:100%;padding:10px 12px;border-radius:10px;border:1px solid var(--line);
+    background:#0d131c;color:var(--text);font:inherit;outline:none;
+  }
+  input[type=text]:focus{border-color:var(--accent)}
+
+  .switch{display:flex;align-items:center;gap:10px;padding:9px 0;font-size:14px;cursor:pointer;user-select:none}
+  .switch input{appearance:none;width:40px;height:23px;border-radius:999px;background:#2a3547;position:relative;transition:.2s;cursor:pointer;flex:none;border:none}
+  .switch input::after{content:"";position:absolute;top:3px;left:3px;width:17px;height:17px;border-radius:50%;background:#8b9bb0;transition:.2s}
+  .switch input:checked{background:rgba(53,208,165,.28)}
+  .switch input:checked::after{left:20px;background:var(--accent)}
+
+  .status{
+    font-size:12.5px;color:var(--muted);border-top:1px solid var(--line);
+    padding-top:12px;margin-top:4px;min-height:20px;word-break:break-word;
+  }
+  .status.err{color:var(--danger)}
+  .status.ok{color:var(--accent)}
+
+  .gallery{display:flex;flex-direction:column;gap:10px;max-height:340px;overflow:auto;padding-right:4px}
+  .empty{color:var(--muted);font-size:13px;font-style:italic}
+  .item{display:flex;gap:11px;align-items:center;background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:9px}
+  .item .thumb{width:64px;height:48px;border-radius:8px;background:#000;flex:none;object-fit:cover;border:1px solid var(--line)}
+  .item .info{flex:1;min-width:0}
+  .item .name{font-size:12.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .item .sub{font-size:11.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .item .acts{display:flex;gap:6px;flex:none}
+  .mini{
+    padding:6px 9px;font-size:12px;border-radius:8px;border:1px solid var(--line);
+    background:#0f1621;color:var(--muted);text-decoration:none;font-weight:600;
+  }
+  .mini:hover{color:var(--accent);border-color:var(--accent)}
+  .note{font-size:11.5px;color:var(--muted);margin-top:10px;line-height:1.5}
+  .note code{background:#0d131c;padding:1px 5px;border-radius:5px;font-size:11px}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">Geo<span>Cam</span></div>
+  <div class="badge">Photos · EXIF GPS</div>
+  <div class="badge">Videos · Mic audio</div>
+  <div class="spacer"></div>
+  <div class="badge" id="secBadge">…</div>
+</header>
+
+<main>
+  <!-- ================= CAMERA STAGE ================= -->
+  <section class="stage" id="stage">
+    <video id="preview" autoplay playsinline muted></video>
+    <div class="flash" id="flash"></div>
+    <div class="rec-pill" id="recPill"><span class="dot"></span><span id="recTime">00:00</span></div>
+    <div class="hud">
+      <div class="hud-box">
+        <div class="coords" id="hudCoords">Location not acquired</div>
+        <div class="meta" id="hudMeta">Tap “Start camera” and allow location access</div>
+        <div class="ts" id="hudTime"></div>
+        <div class="lbl" id="hudLabel"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= SIDE PANEL ================= -->
+  <div style="display:flex;flex-direction:column;gap:18px">
+
+    <div class="panel">
+      <h2>Controls</h2>
+      <div class="btns">
+        <button class="primary wide" id="btnStart"><span class="icon">📷</span> Start camera &amp; GPS</button>
+        <button class="shoot" id="btnPhoto" disabled><span class="icon">⚡</span> Capture photo</button>
+        <button class="rec" id="btnRec" disabled><span class="icon">⏺</span> Record video</button>
+        <button class="wide" id="btnSwitch" disabled><span class="icon">🔄</span> Switch camera</button>
+      </div>
+
+      <div class="field">
+        <label for="labelInput">Overlay label (optional)</label>
+        <input type="text" id="labelInput" placeholder="e.g. Site survey — Block B" maxlength="60">
+      </div>
+
+      <label class="switch"><input type="checkbox" id="chkOverlay" checked> Burn GPS + time overlay</label>
+      <label class="switch"><input type="checkbox" id="chkExif" checked> Write real EXIF GPS into JPEG</label>
+      <label class="switch"><input type="checkbox" id="chkAudio" checked> Record microphone with video</label>
+
+      <div class="status" id="status">Idle.</div>
+    </div>
+
+    <div class="panel">
+      <h2>Captured (<span id="count">0</span>)</h2>
+      <div class="gallery" id="gallery"><div class="empty">Nothing captured yet.</div></div>
+      <div class="note">
+        Files download straight to your device — nothing is uploaded.<br>
+        Requires <code>https://</code> or <code>localhost</code> for camera &amp; GPS.
+      </div>
+    </div>
+
+  </div>
+</main>
+
+<script>
+'use strict';
+
+/* =========================================================
+   0. Small helpers
+   ========================================================= */
+const $ = (s) => document.querySelector(s);
+
+const els = {
+  stage:      $('#stage'),
+  video:      $('#preview'),
+  flash:      $('#flash'),
+  recPill:    $('#recPill'),
+  recTime:    $('#recTime'),
+  hudCoords:  $('#hudCoords'),
+  hudMeta:    $('#hudMeta'),
+  hudTime:    $('#hudTime'),
+  hudLabel:   $('#hudLabel'),
+  btnStart:   $('#btnStart'),
+  btnPhoto:   $('#btnPhoto'),
+  btnRec:     $('#btnRec'),
+  btnSwitch:  $('#btnSwitch'),
+  chkOverlay: $('#chkOverlay'),
+  chkExif:    $('#chkExif'),
+  chkAudio:   $('#chkAudio'),
+  labelInput: $('#labelInput'),
+  status:     $('#status'),
+  gallery:    $('#gallery'),
+  count:      $('#count'),
+  secBadge:   $('#secBadge'),
+};
+
+const state = {
+  stream: null,
+  position: null,
+  geoError: null,
+  watchId: null,
+  facingMode: 'environment',
+  recording: false,
+  recorder: null,
+  chunks: [],
+  recStart: 0,
+  recTicker: null,
+  recFrameHandle: null,
+  recUsingRVFC: false,
+  items: [],
+  itemSeq: 0,
+};
+
+function setStatus(msg, kind = '') {
+  els.status.textContent = msg;
+  els.status.className = 'status' + (kind ? ' ' + kind : '');
+}
+
+function pad2(n) { return String(n).padStart(2, '0'); }
+
+function formatDateTime(d) {
+  const off = -d.getTimezoneOffset();
+  const sign = off >= 0 ? '+' : '-';
+  const hh = pad2(Math.floor(Math.abs(off) / 60));
+  const mm = pad2(Math.abs(off) % 60);
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())} ` +
+         `${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())} ` +
+         `UTC${sign}${hh}:${mm}`;
+}
+
+function formatCoords(lat, lon) {
+  return `${Math.abs(lat).toFixed(6)}° ${lat >= 0 ? 'N' : 'S'}, ` +
+         `${Math.abs(lon).toFixed(6)}° ${lon >= 0 ? 'E' : 'W'}`;
+}
+
+/* =========================================================
+   1. Security context check
+   ========================================================= */
+(function checkSecure() {
+  const ok = window.isSecureContext;
+  els.secBadge.textContent = ok ? '🔒 Secure context' : '⚠️ Insecure context';
+  if (!ok) {
+    els.secBadge.style.color = '#ff4d5e';
+    setStatus('Camera and GPS need HTTPS (or localhost). Serve this file over a secure origin.', 'err');
+  }
+})();
+
+/* =========================================================
+   2. Geolocation
+   ========================================================= */
+function startGeolocation() {
+  if (!('geolocation' in navigator)) {
+    state.geoError = 'Geolocation API not supported.';
+    setStatus('Geolocation is not supported by this browser.', 'err');
+    return;
+  }
+  if (state.watchId !== null) return;
+
+  state.watchId = navigator.geolocation.watchPosition(
+    (pos) => {
+      state.position = {
+        lat: pos.coords.latitude,
+        lon: pos.coords.longitude,
+        accuracy: pos.coords.accuracy,
+        altitude: pos.coords.altitude,
+        altitudeAccuracy: pos.coords.altitudeAccuracy,
+        heading: pos.coords.heading,
+        speed: pos.coords.speed,
+        timestamp: pos.timestamp,
+      };
+      state.geoError = null;
+      setStatus('Location locked · accuracy ±' + Math.round(pos.coords.accuracy) + ' m', 'ok');
+    },
+    (err) => {
+      state.geoError = err.message || 'Location error';
+      setStatus('Location error: ' + state.geoError, 'err');
+    },
+    { enableHighAccuracy: true, maximumAge: 5000, timeout: 20000 }
+  );
+}
+
+function stopGeolocation() {
+  if (state.watchId !== null) {
+    navigator.geolocation.clearWatch(state.watchId);
+    state.watchId = null;
+  }
+}
+
+/* =========================================================
+   3. Camera
+   ========================================================= */
+async function startCamera() {
+  stopCamera();
+
+  const wantAudio = els.chkAudio.checked;
+  const baseVideo = {
+    facingMode: { ideal: state.facingMode },
+    width:  { ideal: 1920 },
+    height: { ideal: 1080 },
+  };
+
+  let stream = null;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({
+      video: baseVideo,
+      audio: wantAudio
+        ? { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
+        : false,
+    });
+  } catch (err) {
+    // If audio failed but video might still work, retry video-only.
+    if (wantAudio) {
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ video: baseVideo, audio: false });
+        setStatus('Camera on (microphone unavailable — video will be silent).', 'err');
+      } catch (err2) {
+        setStatus('Camera error: ' + (err2.message || err2.name), 'err');
+        return;
+      }
+    } else {
+      setStatus('Camera error: ' + (err.message || err.name), 'err');
+      return;
+    }
+  }
+
+  state.stream = stream;
+  els.video.srcObject = stream;
+
+  const mirror = state.facingMode === 'user';
+  els.stage.classList.toggle('mirror', mirror);
+
+  try { await els.video.play(); } catch (_) {}
+
+  els.btnPhoto.disabled = false;
+  els.btnRec.disabled = false;
+  els.btnSwitch.disabled = false;
+  els.btnStart.textContent = '📷 Restart camera';
+
+  const vt = stream.getVideoTracks()[0];
+  const s = vt ? vt.getSettings() : {};
+  if (!els.status.classList.contains('err')) {
+    setStatus(`Camera ready · ${s.width || '?'}×${s.height || '?'}` +
+              (stream.getAudioTracks().length ? ' · mic on' : ''), 'ok');
+  }
+
+  startGeolocation();
+}
+
+function stopCamera() {
+  if (state.recording) stopRecording();
+  if (state.stream) {
+    state.stream.getTracks().forEach(t => t.stop());
+    state.stream = null;
+  }
+  els.video.srcObject = null;
+}
+
+async function switchCamera() {
+  state.facingMode = state.facingMode === 'environment' ? 'user' : 'environment';
+  await startCamera();
+}
+
+/* =========================================================
+   4. Live HUD
+   ========================================================= */
+function hudLines() {
+  const p = state.position;
+  const out = { coords: '', meta: '', time: formatDateTime(new Date()), label: '' };
+
+  if (p) {
+    out.coords = formatCoords(p.lat, p.lon);
+    const bits = [];
+    if (p.accuracy != null) bits.push(`±${Math.round(p.accuracy)} m`);
+    if (p.altitude != null) bits.push(`alt ${p.altitude.toFixed(0)} m`);
+    if (p.speed != null && !isNaN(p.speed)) bits.push(`${(p.speed * 3.6).toFixed(0)} km/h`);
+    if (p.heading != null && !isNaN(p.heading)) bits.push(`${p.heading.toFixed(0)}°`);
+    out.meta = bits.join('  ·  ') || 'GPS fix acquired';
+  } else {
+    out.coords = 'Location not acquired';
+    out.meta = state.geoError ? state.geoError : 'Waiting for GPS fix…';
+  }
+
+  const label = els.labelInput.value.trim();
+  if (label) out.label = label;
+
+  return out;
+}
+
+function updateHud() {
+  const h = hudLines();
+  els.hudCoords.textContent = h.coords;
+  els.hudMeta.textContent = h.meta;
+  els.hudTime.textContent = h.time;
+  els.hudLabel.textContent = h.label;
+}
+setInterval(updateHud, 250);
+
+/* =========================================================
+   5. Watermark drawing on canvas
+   ========================================================= */
+function roundRectPath(ctx, x, y, w, h, r) {
+  if (typeof ctx.roundRect === 'function') {
+    ctx.beginPath();
+    ctx.roundRect(x, y, w, h, r);
+    return;
+  }
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y,     x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x,     y + h, r);
+  ctx.arcTo(x,     y + h, x,     y,     r);
+  ctx.arcTo(x,     y,     x + w, y,     r);
+  ctx.closePath();
+}
+
+function drawWatermark(ctx, w, h) {
+  const h2 = hudLines();
+  const lines = [h2.coords];
+  if (h2.meta) lines.push(h2.meta);
+  lines.push(h2.time);
+  if (h2.label) lines.push(h2.label);
+
+  const base = Math.max(w, h);
+  const fs = Math.max(13, Math.round(base * 0.0205));
+  const lh = Math.round(fs * 1.42);
+  const padX = Math.round(fs * 0.85);
+  const padY = Math.round(fs * 0.62);
+  const margin = Math.round(fs * 1.1);
+
+  const font = `600 ${fs}px ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif`;
+  ctx.save();
+  ctx.font = font;
+  ctx.textBaseline = 'top';
+
+  let maxW = 0;
+  for (const l of lines) maxW = Math.max(maxW, ctx.measureText(l).width);
+
+  const boxW = Math.min(w - margin * 2, maxW + padX * 2 + Math.round(fs * 0.5));
+  const boxH = lines.length * lh + padY * 2;
+  const x = margin;
+  const y = h - margin - boxH;
+
+  // panel
+  ctx.fillStyle = 'rgba(0,0,0,0.58)';
+  roundRectPath(ctx, x, y, boxW, boxH, Math.round(fs * 0.6));
+  ctx.fill();
+
+  // accent bar
+  ctx.fillStyle = '#35d0a5';
+  roundRectPath(ctx, x, y, Math.round(fs * 0.28), boxH, Math.round(fs * 0.14));
+  ctx.fill();
+
+  // text
+  ctx.font = font;
+  ctx.fillStyle = '#ffffff';
+  const tx = x + padX + Math.round(fs * 0.45);
+  lines.forEach((line, i) => {
+    const ly = y + padY + i * lh;
+    if (i === lines.length - 1 && h2.label && line === h2.label) {
+      ctx.fillStyle = '#ffd479';
+    }
+    ctx.fillText(line, tx, ly);
+  });
+
+  ctx.restore();
+}
+
+/* =========================================================
+   6. Minimal EXIF (GPS) writer for JPEG
+   ========================================================= */
+function buildExifTiff(pos, date) {
+  const ascii = (s) => {
+    const b = new Uint8Array(s.length);
+    for (let i = 0; i < s.length; i++) b[i] = s.charCodeAt(i) & 0xFF;
+    return b;
+  };
+
+  // [num, den] pairs -> bytes (little endian)
+  const rationalsBytes = (pairs) => {
+    const b = new Uint8Array(pairs.length * 8);
+    const dv = new DataView(b.buffer);
+    pairs.forEach(([n, d], i) => {
+      dv.setUint32(i * 8,     Math.max(0, Math.round(n)) >>> 0, true);
+      dv.setUint32(i * 8 + 4, Math.max(1, Math.round(d)) >>> 0, true);
+    });
+    return b;
+  };
+
+  const toDMS = (v) => {
+    v = Math.abs(v);
+    const d = Math.floor(v);
+    const mf = (v - d) * 60;
+    const m = Math.floor(mf);
+    let s = (mf - m) * 60;
+    let sNum = Math.round(s * 10000);
+    if (sNum >= 10000) sNum = 9999;
+    return [[d, 1], [m, 1], [sNum, 10000]];
+  };
+
+  const lat = pos.lat, lon = pos.lon, alt = pos.altitude;
+
+  // ---- GPS IFD ----
+  const gps = [];
+  gps.push({ tag: 0x0000, type: 1, count: 4, data: new Uint8Array([2, 3, 0, 0]) });
+  gps.push({ tag: 0x0001, type: 2, count: 2, data: ascii(lat >= 0 ? 'N\u0000' : 'S\u0000') });
+  gps.push({ tag: 0x0002, type: 5, count: 3, data: rationalsBytes(toDMS(lat)) });
+  gps.push({ tag: 0x0003, type: 2, count: 2, data: ascii(lon >= 0 ? 'E\u0000' : 'W\u0000') });
+  gps.push({ tag: 0x0004, type: 5, count: 3, data: rationalsBytes(toDMS(lon)) });
+
+  if (alt != null && isFinite(alt)) {
+    gps.push({ tag: 0x0005, type: 1, count: 1, data: new Uint8Array([alt < 0 ? 1 : 0]) });
+    gps.push({ tag: 0x0006, type: 5, count: 1,
+               data: rationalsBytes([[Math.abs(alt) * 100, 100]]) });
+  }
+
+  gps.push({ tag: 0x0007, type: 5, count: 3,
+             data: rationalsBytes([
+               [date.getUTCHours(), 1],
+               [date.getUTCMinutes(), 1],
+               [Math.round(date.getUTCSeconds() * 1000), 1000],
+             ]) });
+
+  const dateStamp =
+    `${date.getFullYear()}:${pad2(date.getMonth() + 1)}:${pad2(date.getDate())}\u0000`;
+  gps.push({ tag: 0x001D, type: 2, count: 11, data: ascii(dateStamp) });
+
+  // ---- IFD0 ----
+  const dateTimeStr =
+    `${date.getFullYear()}:${pad2(date.getMonth() + 1)}:${pad2(date.getDate())} ` +
+    `${pad2(date.getHours())}:${pad2(date.getMinutes())}:${pad2(date.getSeconds())}\u0000`;
+
+  const ifd0 = [
+    { tag: 0x0112, type: 3, count: 1, data: new Uint8Array([1, 0]) },              // Orientation
+    { tag: 0x0132, type: 2, count: 20, data: ascii(dateTimeStr) },                 // DateTime
+  ];
+
+  // ---- Layout ----
+  const IFD0_OFFSET = 8;
+  const n0 = ifd0.length + 1;                                   // +1 for GPS pointer
+  const GPS_IFD_OFFSET = IFD0_OFFSET + 2 + n0 * 12 + 4;
+  const nG = gps.length;
+  let cursor = GPS_IFD_OFFSET + 2 + nG * 12 + 4;
+
+  // GPS pointer entry (LONG, inline)
+  const ptr = new Uint8Array(4);
+  new DataView(ptr.buffer).setUint32(0, GPS_IFD_OFFSET, true);
+  ifd0.push({ tag: 0x8825, type: 4, count: 1, data: ptr });
+
+  const chunks = [];
+  const assign = (entry) => {
+    const d = entry.data;
+    if (d.length <= 4) { entry.inline = true; return; }
+    entry.inline = false;
+    entry.offset = cursor;
+    chunks.push({ offset: cursor, data: d });
+    cursor += d.length;
+    if (cursor % 2) cursor++;     // word alignment
+  };
+  ifd0.forEach(assign);
+  gps.forEach(assign);
+
+  const out = new Uint8Array(cursor);
+  const dv = new DataView(out.buffer);
+
+  // TIFF header: little-endian
+  out[0] = 0x49; out[1] = 0x49;
+  dv.setUint16(2, 0x002A, true);
+  dv.setUint32(4, IFD0_OFFSET, true);
+
+  const writeIFD = (offset, entries) => {
+    dv.setUint16(offset, entries.length, true);
+    let p = offset + 2;
+    for (const e of entries) {
+      dv.setUint16(p, e.tag, true);
+      dv.setUint16(p + 2, e.type, true);
+      dv.setUint32(p + 4, e.count, true);
+      if (e.inline) {
+        out.set(e.data, p + 8);           // remaining bytes stay 0
+      } else {
+        dv.setUint32(p + 8, e.offset, true);
+      }
+      p += 12;
+    }
+    dv.setUint32(p, 0, true);             // next IFD = none
+  };
+
+  writeIFD(IFD0_OFFSET, ifd0);
+  writeIFD(GPS_IFD_OFFSET, gps);
+  for (const c of chunks) out.set(c.data, c.offset);
+
+  return out;
+}
+
+function injectApp1(jpegBuffer, tiffBytes) {
+  const src = new Uint8Array(jpegBuffer);
+  if (src.length < 4 || src[0] !== 0xFF || src[1] !== 0xD8) return src; // not a JPEG
+
+  const exifId = [0x45, 0x78, 0x69, 0x66, 0x00, 0x00];  // "Exif\0\0"
+  const payload = exifId.length + tiffBytes.length;
+  const app1Len = payload + 2;                           // length field includes itself
+
+  const app1 = new Uint8Array(2 + app1Len);
+  app1[0] = 0xFF; app1[1] = 0xE1;
+  app1[2] = (app1Len >> 8) & 0xFF;
+  app1[3] = app1Len & 0xFF;
+  app1.set(exifId, 4);
+  app1.set(tiffBytes, 4 + exifId.length);
+
+  const out = new Uint8Array(src.length + app1.length);
+  out.set(src.subarray(0, 2), 0);                        // SOI
+  out.set(app1, 2);                                      // APP1
+  out.set(src.subarray(2), 2 + app1.length);             // rest
+  return out;
+}
+
+async function withExifGps(blob, pos, date) {
+  try {
+    const buf = await blob.arrayBuffer();
+    const tiff = buildExifTiff(pos, date);
+    const merged = injectApp1(buf, tiff);
+    return new Blob([merged], { type: 'image/jpeg' });
+  } catch (err) {
+    console.warn('EXIF injection failed:', err);
+    return blob;
+  }
+}
+
+/* =========================================================
+   7. Naming / downloading
+   ========================================================= */
+function geoSlug() {
+  const p = state.position;
+  return p ? `${p.lat.toFixed(5)}_${p.lon.toFixed(5)}` : 'nogps';
+}
+
+function buildFilename(kind, ext) {
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+  return `geocam_${kind}_${stamp}_${geoSlug()}.${ext}`;
+}
+
+function saveBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.rel = 'noopener';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 120000);
+  return url;
+}
+
+/* =========================================================
+   8. Gallery
+   ========================================================= */
+function addItem({ kind, blob, url, filename, meta }) {
+  const id = ++state.itemSeq;
+  state.items.push({ id, kind, blob, url, filename, meta });
+  renderGallery();
+}
+
+function renderGallery() {
+  els.count.textContent = state.items.length;
+
+  if (!state.items.length) {
+    els.gallery.innerHTML = '<div class="empty">Nothing captured yet.</div>';
+    return;
+  }
+
+  els.gallery.innerHTML = '';
+  // newest first
+  for (let i = state.items.length - 1; i >= 0; i--) {
+    const it = state.items[i];
+
+    const row = document.createElement('div');
+    row.className = 'item';
+
+    if (it.kind === 'photo') {
+      const img = document.createElement('img');
+      img.className = 'thumb';
+      img.src = it.url;
+      img.alt = '';
+      row.appendChild(img);
+    } else {
+      const v = document.createElement('video');
+      v.className = 'thumb';
+      v.src = it.url + '#t=0.4';
+      v.muted = true;
+      v.playsInline = true;
+      v.preload = 'metadata';
+      row.appendChild(v);
+    }
+
+    const info = document.createElement('div');
+    info.className = 'info';
+    const name = document.createElement('div');
+    name.className = 'name';
+    name.textContent = it.filename;
+    const sub = document.createElement('div');
+    sub.className = 'sub';
+    sub.textContent = it.meta.location
+      ? `${it.meta.location.lat.toFixed(5)}, ${it.meta.location.lon.toFixed(5)}` +
+        (it.meta.location.accuracy != null ? ` · ±${Math.round(it.meta.location.accuracy)} m` : '')
+      : 'no GPS';
+    info.appendChild(name);
+    info.appendChild(sub);
+    row.appendChild(info);
+
+    const acts = document.createElement('div');
+    acts.className = 'acts';
+
+    const a = document.createElement('a');
+    a.className = 'mini';
+    a.href = it.url;
+    a.download = it.filename;
+    a.textContent = '⬇';
+    a.title = 'Download';
+    acts.appendChild(a);
+
+    const mb = document.createElement('button');
+    mb.className = 'mini';
+    mb.type = 'button';
+    mb.textContent = '{ }';
+    mb.title = 'Download metadata JSON';
+    mb.style.cursor = 'pointer';
+    mb.addEventListener('click', () => {
+      const jb = new Blob([JSON.stringify(it.meta, null, 2)], { type: 'application/json' });
+      saveBlob(jb, it.filename.replace(/\.[^.]+$/, '') + '.json');
+    });
+    acts.appendChild(mb);
+
+    row.appendChild(acts);
+    els.gallery.appendChild(row);
+  }
+}
+
+/* =========================================================
+   9. Photo capture
+   ========================================================= */
+async function capturePhoto() {
+  if (!state.stream) return;
+  const v = els.video;
+  const w = v.videoWidth || 1280;
+  const h = v.videoHeight || 720;
+
+  const canvas = document.createElement('canvas');
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext('2d');
+
+  ctx.save();
+  if (state.facingMode === 'user') {
+    ctx.translate(w, 0);
+    ctx.scale(-1, 1);
+  }
+  ctx.drawImage(v, 0, 0, w, h);
+  ctx.restore();
+
+  if (els.chkOverlay.checked) drawWatermark(ctx, w, h);
+
+  // shutter flash
+  els.flash.classList.add('go');
+  requestAnimationFrame(() => els.flash.classList.remove('go'));
+
+  let blob = await new Promise((res) => canvas.toBlob(res, 'image/jpeg', 0.93));
+  if (!blob) { setStatus('Failed to encode photo.', 'err'); return; }
+
+  const now = new Date();
+  if (els.chkExif.checked && state.position) {
+    blob = await withExifGps(blob, state.position, now);
+  }
+
+  const filename = buildFilename('photo', 'jpg');
+  const url = saveBlob(blob, filename);
+
+  addItem({
+    kind: 'photo',
+    blob,
+    url,
+    filename,
+    meta: buildMeta('photo', { width: w, height: h, bytes: blob.size }),
+  });
+
+  setStatus(`Photo saved · ${(blob.size / 1024).toFixed(0)} KB` +
+            (els.chkExif.checked && state.position ? ' · EXIF GPS embedded' : ''), 'ok');
+}
+
+function buildMeta(kind, extra = {}) {
+  const p = state.position;
+  return {
+    type: kind,
+    capturedAt: new Date().toISOString(),
+    capturedAtLocal: formatDateTime(new Date()),
+    label: els.labelInput.value.trim() || null,
+    location: p ? {
+      latitude: p.lat,
+      longitude: p.lon,
+      accuracyMeters: p.accuracy,
+      altitudeMeters: p.altitude,
+      altitudeAccuracyMeters: p.altitudeAccuracy,
+      headingDegrees: p.heading,
+      speedMetersPerSecond: p.speed,
+      fixTimestamp: p.timestamp,
+    } : null,
+    overlayBurnedIn: els.chkOverlay.checked,
+    exifGpsWritten: kind === 'photo' ? els.chkExif.checked : false,
+    device: {
+      userAgent: navigator.userAgent,
+      platform: navigator.platform,
+      language: navigator.language,
+    },
+    ...extra,
+  };
+}
+
+/* =========================================================
+   10. Video recording
+   ========================================================= */
+function pickVideoMime() {
+  const candidates = [
+    'video/webm;codecs=vp9,opus',
+    'video/webm;codecs=vp8,opus',
+    'video/webm',
+    'video/mp4;codecs=avc1.42E01E,mp4a.40.2',
+    'video/mp4',
+  ];
+  if (typeof MediaRecorder === 'undefined') return '';
+  for (const c of candidates) {
+    try { if (MediaRecorder.isTypeSupported(c)) return c; } catch (_) {}
+  }
+  return '';
+}
+
+function startRecording() {
+  if (!state.stream || state.recording) return;
+
+  const v = els.video;
+  const w = v.videoWidth || 1280;
+  const h = v.videoHeight || 720;
+
+  let recordStream;
+  let canvas = null;
+  let ctx = null;
+
+  const canCanvasCapture = typeof HTMLCanvasElement !== 'undefined' &&
+                           typeof HTMLCanvasElement.prototype.captureStream === 'function';
+
+  if (canCanvasCapture) {
+    canvas = document.createElement('canvas');
+    canvas.width = w;
+    canvas.height = h;
+    ctx = canvas.getContext('2d', { alpha: false });
+    recordStream = canvas.captureStream(30);
+    // Burn the current frame immediately so recording never starts black.
+    drawVideoFrame(ctx, w, h);
+  } else {
+    // Fallback: record the raw camera stream (no burned-in overlay).
+    recordStream = new MediaStream();
+    state.stream.getVideoTracks().forEach(t => recordStream.addTrack(t));
+    setStatus('Canvas capture unsupported — recording raw camera feed.', 'err');
+  }
+
+  // Attach microphone audio
+  const audioTracks = state.stream.getAudioTracks();
+  audioTracks.forEach(t => recordStream.addTrack(t));
+
+  const mime = pickVideoMime();
+  let recorder;
+  try {
+    recorder = new MediaRecorder(recordStream, {
+      ...(mime ? { mimeType: mime } : {}),
+      videoBitsPerSecond: Math.min(12_000_000, Math.max(4_000_000, w * h * 4)),
+      audioBitsPerSecond: 128_000,
+    });
+  } catch (err) {
+    try {
+      recorder = new MediaRecorder(recordStream);
+    } catch (err2) {
+      setStatus('Recording unsupported: ' + (err2.message || err2.name), 'err');
+      return;
+    }
+  }
+
+  state.chunks = [];
+  state.recorder = recorder;
+  state.recording = true;
+  state.recStart = Date.now();
+
+  recorder.ondataavailable = (e) => {
+    if (e.data && e.data.size) state.chunks.push(e.data);
+  };
+
+  recorder.onerror = (e) => {
+    setStatus('Recorder error: ' + (e.error ? e.error.name : 'unknown'), 'err');
+  };
+
+  recorder.onstop = () => {
+    const type = recorder.mimeType || 'video/webm';
+    const blob = new Blob(state.chunks, { type });
+    const ext = type.includes('mp4') ? 'mp4' : 'webm';
+    const filename = buildFilename('video', ext);
+    const durationMs = Date.now() - state.recStart;
+    const url = saveBlob(blob, filename);
+
+    addItem({
+      kind: 'video',
+      blob,
+      url,
+      filename,
+      meta: buildMeta('video', {
+        width: w,
+        height: h,
+        durationMs,
+        bytes: blob.size,
+        mimeType: type,
+        microphone: audioTracks.length > 0,
+      }),
+    });
+
+    setStatus(`Video saved · ${(blob.size / 1048576).toFixed(1)} MB · ` +
+              `${(durationMs / 1000).toFixed(1)} s`, 'ok');
+    state.chunks = [];
+  };
+
+  // ---- Draw loop ----
+  state.recUsingRVFC = 'requestVideoFrameCallback' in HTMLVideoElement.prototype;
+  const loop = () => {
+    if (!state.recording) return;
+    if (canvas && ctx) drawVideoFrame(ctx, w, h);
+    state.recFrameHandle = state.recUsingRVFC
+      ? v.requestVideoFrameCallback(loop)
+      : requestAnimationFrame(loop);
+  };
+
+  function drawVideoFrame(context, cw, ch) {
+    context.save();
+    if (state.facingMode === 'user') {
+      context.translate(cw, 0);
+      context.scale(-1, 1);
+    }
+    try { context.drawImage(v, 0, 0, cw, ch); } catch (_) {}
+    context.restore();
+    if (els.chkOverlay.checked) drawWatermark(context, cw, ch);
+  }
+
+  loop();
+
+  recorder.start(1000); // collect chunks every second
+
+  els.btnRec.innerHTML = '<span class="icon">⏹</span> Stop recording';
+  els.btnPhoto.disabled = true;
+  els.recPill.classList.add('on');
+  els.recTime.textContent = '00:00';
+
+  state.recTicker = setInterval(() => {
+    const s = Math.floor((Date.now() - state.recStart) / 1000);
+    els.recTime.textContent = `${pad2(Math.floor(s / 60))}:${pad2(s % 60)}`;
+  }, 250);
+
+  setStatus('Recording…');
+}
+
+function stopRecording() {
+  if (!state.recording) return;
+  state.recording = false;
+
+  const v = els.video;
+  if (state.recFrameHandle != null) {
+    try {
+      if (state.recUsingRVFC) v.cancelVideoFrameCallback(state.recFrameHandle);
+      else cancelAnimationFrame(state.recFrameHandle);
+    } catch (_) {}
+    state.recFrameHandle = null;
+  }
+
+  clearInterval(state.recTicker);
+  state.recTicker = null;
+
+  try {
+    if (state.recorder && state.recorder.state !== 'inactive') state.recorder.stop();
+  } catch (err) {
+    console.warn(err);
+  }
+
+  els.btnRec.innerHTML = '<span class="icon">⏺</span> Record video';
+  els.btnPhoto.disabled = false;
+  els.recPill.classList.remove('on');
+}
+
+/* =========================================================
+   11. Wiring
+   ========================================================= */
+els.btnStart.addEventListener('click', async () => {
+  setStatus('Requesting camera & location permission…');
+  await startCamera();
+});
+
+els.btnSwitch.addEventListener('click', switchCamera);
+
+els.btnPhoto.addEventListener('click', () => {
+  capturePhoto().catch(err => setStatus('Capture failed: ' + err.message, 'err'));
+});
+
+els.btnRec.addEventListener('click', () => {
+  if (state.recording) stopRecording();
+  else startRecording();
+});
+
+els.chkAudio.addEventListener('change', async () => {
+  if (state.stream) {
+    setStatus('Restarting camera to apply audio setting…');
+    await startCamera();
+  }
+});
+
+els.labelInput.addEventListener('input', updateHud);
+
+window.addEventListener('beforeunload', () => {
+  stopRecording();
+  stopCamera();
+  stopGeolocation();
+  state.items.forEach(it => { try { URL.revokeObjectURL(it.url); } catch (_) {} });
+});
+
+// Spacebar shortcut = photo, R = record toggle (desktop convenience)
+window.addEventListener('keydown', (e) => {
+  if (e.target.tagName === 'INPUT') return;
+  if (e.code === 'Space' && !els.btnPhoto.disabled) { e.preventDefault(); els.btnPhoto.click(); }
+  if (e.key.toLowerCase() === 'r' && !els.btnRec.disabled) { e.preventDefault(); els.btnRec.click(); }
+});
+
+updateHud();
+renderGallery();
+</script>
+</body>
+</html>
